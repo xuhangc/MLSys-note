@@ -118,7 +118,7 @@ Q, K, V \in \mathbb{R}^{B \times H \times S \times D}
 $$
 
 $$
-A = \operatorname{softmax}(QK^T / \sqrt{D})
+A = \mathrm{softmax}(QK^T / \sqrt{D})
 \quad\Rightarrow\quad
 A \in \mathbb{R}^{B \times H \times S \times S}
 $$
