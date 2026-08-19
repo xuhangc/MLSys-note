@@ -52,9 +52,9 @@ H100 SXM 的官方规格列出 3.35 TB/s 的 GPU 内存带宽和 900 GB/s 的 NV
 
 一个很有用的第一近似是**算术强度**：
 
-\[
-\operatorname{Arithmetic\ Intensity}=\frac{\text{FLOPs}}{\text{Bytes moved to/from main memory}}.
-\]
+$$
+\mathrm{Arithmetic\ Intensity}=\frac{\text{FLOPs}}{\text{Bytes moved to/from main memory}}.
+$$
 
 当分子很小或分母很大时，算子更可能是 **memory-bound**：算力等数据；当这个比值足够高时，算子才更可能接近 **compute-bound**：数据已经到位，计算单元成为限制。这个概念不是对每个 kernel 的精确诊断，却能直接解释两个实践经验：**融合算子**可以减少中间张量的 HBM 往返；**分块（tiling）**可以提升一次加载后的复用次数。
 
@@ -74,11 +74,11 @@ H100 SXM 的官方规格列出 3.35 TB/s 的 GPU 内存带宽和 900 GB/s 的 NV
 
 先考察单个 attention head。设序列长度为 \(N\)，head dimension 为 \(d\)，则
 
-\[
+$$
 Q,K,V\in\mathbb{R}^{N\times d},\qquad
 S=\frac{QK^\top}{\sqrt d}\in\mathbb{R}^{N\times N},\qquad
-O=\operatorname{softmax}(S)V.
-\]
+O=\mathrm{softmax}(S)V.
+$$
 
 计算 `Q @ K.T` 的 FLOPs 随 \(N^2d\) 增长，这是 attention 的计算成本；但朴素实现若显式保存 `S`，就会同时制造一个 \(N\times N\) 的大中间量。若还将 Softmax 概率 `P` 单独物化，就又增加一个同形状张量。
 
@@ -116,10 +116,10 @@ FlashAttention 原论文将此视作 **IO-aware exact attention**：优化目标
 
 这是整件事最容易被误解、也最有价值的数学部分。标准稳定 Softmax 对一行分数向量 \(x\) 写作
 
-\[
-\operatorname{softmax}(x)_j=
+$$
+\mathrm{softmax}(x)_j=
 \frac{e^{x_j-m}}{\sum_t e^{x_t-m}},\qquad m=\max_t x_t.
-\]
+$$
 
 如果把一行 keys 按 tile 分成 \(B_1,B_2,\ldots\)，看似必须先看完所有 score 才知道全局最大值 \(m\)。Online Softmax 的关键发现是：历史数据不需要逐元素保留；对每个 query 行，只需保留足够的**可合并状态**。
 
@@ -129,11 +129,11 @@ FlashAttention 原论文将此视作 **IO-aware exact attention**：优化目标
 
 对已经处理的 key 集合 \(A\)，定义
 
-\[
+$$
 m_A=\max_{j\in A}s_j,\qquad
 \ell_A=\sum_{j\in A}e^{s_j-m_A},\qquad
 u_A=\sum_{j\in A}e^{s_j-m_A}v_j.
-\]
+$$
 
 最终的 attention 输出并不是 \(\nu_A\) 本身，而是 \(o_A=\nu_A/\ell_A\)。这里将 \(\nu\) 称作“未归一化的加权分子”。与每个 tile 都直接更新归一化输出相比，把分子与分母分开保存有一个教学上的优点：我们能清楚看见，所谓的“修正旧输出”实际上是**对历史分子与历史分母施加同一个指数重标定**。
 
@@ -147,35 +147,35 @@ u_A=\sum_{j\in A}e^{s_j-m_A}v_j.
 
 设新 tile 为 \(B\)，它自己的局部最大值为 \(m_B\)。新旧两部分统一到一个共同的数值稳定基准：
 
-\[
+$$
 m' = \max(m_A,m_B).
-\]
+$$
 
 旧状态本来按 \(m_A\) 缩放；现在基准改成 \(m'\)，所以历史部分需要乘修正系数
 
-\[
+$$
 \alpha=e^{m_A-m'}.
-\]
+$$
 
 新 tile 自己的权重为
 
-\[
+$$
 W_B=e^{S_B-m'},
-\]
+$$
 
 其中减法按行广播。于是合并式为
 
-\[
+$$
 \ell'=\alpha\ell_A+\sum_j(W_B)_j,
-\]
+$$
 
-\[
+$$
 \nu'=\alpha\nu_A+W_BV_B,
-\]
+$$
 
-\[
+$$
 o'=\frac{\nu'}{\ell'}.
-\]
+$$
 
 这就是 Online Softmax 的不变量：在处理任意数量的 tile 后，`m` 始终是已见 score 的最大值，`ℓ` 与 `ν` 始终是围绕该最大值重标定过的完整历史归约。因而在最后一个 tile 后，`ν / ℓ` 与一次性对整行做稳定 Softmax 完全一致。
 
