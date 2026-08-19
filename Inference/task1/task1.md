@@ -71,15 +71,15 @@ GPU 存储结构的核心规律是：**越靠近执行单元，越快、越小�
 
 把一个 kernel 的计算量记为 `FLOPs`，移动的数据量记为 `Bytes`，定义其**算术强度**：
 
-\[
+$$
 I = \frac{\text{FLOPs}}{\text{Bytes moved}} \quad (\text{FLOP/Byte})
-\]
+$$
 
 若显存带宽为 `BW`，峰值计算能力为 `P_peak`，一个常用的简化 Roofline 上界为：
 
-\[
+$$
 P_{attainable} \le \min(P_{peak},\ I \times BW)
-\]
+$$
 
 当 `I × BW < P_peak` 时，算子更接近 **memory-bound（访存受限）**：即使增加计算单元，也常在等待数据。当 `I × BW ≥ P_peak` 时，才有机会转向 compute-bound（算力受限）。这正是为什么高算力 GPU 往往更强调片上复用和数据搬运优化——计算增长得比外部内存带宽更快时，“喂饱计算单元”会更难。[2] [4]
 
@@ -113,21 +113,21 @@ print(roofline_upper_bound_tflops(ai, 3.0, 1000.0))       # 6.0 TFLOP/s
 
 对单层多头注意力而言，若显式构造 attention score，核心形状可抽象为：
 
-\[
+$$
 Q, K, V \in \mathbb{R}^{B \times H \times S \times D}
-\]
+$$
 
-\[
+$$
 A = \operatorname{softmax}(QK^T / \sqrt{D})
 \quad\Rightarrow\quad
 A \in \mathbb{R}^{B \times H \times S \times S}
-\]
+$$
 
 因此，**单份**显式 score/probability 张量的字节数为：
 
-\[
+$$
 M_{score} = B \times H \times S^2 \times e
-\]
+$$
 
 其中 `e` 是每元素字节数。训练时，反向传播还会保存更多中间状态；所以它的总显存远大于这里的单一估算。但这个公式已经足以揭示风险：`S` 翻倍，`S²` 变成四倍。
 
@@ -183,15 +183,15 @@ FlashAttention 的关键不是“把 Attention 的数学计算从 O(S²) 变为 
 
 对一层而言，单个请求的 Key 和 Value 通常各有形状：
 
-\[
+$$
 K, V \in \mathbb{R}^{H_{kv} \times S \times D}
-\]
+$$
 
 加入 batch `B`、层数 `L` 和每元素字节数 `e` 后，完整缓存的理想化预算是：
 
-\[
+$$
 \boxed{M_{KV} = 2 \times B \times L \times H_{kv} \times S \times D \times e}
-\]
+$$
 
 | 符号 | 含义 | 对容量的影响 |
 | --- | --- | --- |
@@ -231,9 +231,9 @@ def kv_bytes_per_token_per_request(shape: ModelKVShape) -> int:
 
 以 `L=32, H_kv=32, D=128, e=2` 为例，**单个新 token、单个请求**增加：
 
-\[
+$$
 2 \times 32 \times 32 \times 128 \times 2 = 524{,}288\ \text{bytes} = 0.5\ \text{MiB}
-\]
+$$
 
 这看似不大，但把它乘上 32K token 和多个并发请求，成本会立刻进入 GiB 甚至数十 GiB 的量级。
 
