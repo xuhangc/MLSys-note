@@ -15,7 +15,7 @@
 
 ## 0. 致谢、来源与学习路线
 
-本文是围绕 **DataWhale** 两份学习材料重新编排的原创学习笔记。DataWhale 通过开源学习模式提供 AI 学习路线、课程与社群连接；如果你希望系统学习相关主题，可以从其[官方网站][1]和 [GitHub 组织页][2]进入。本文特别参考了《GPU 物理架构与内存层级》和《FlashAttention 模拟》两份教程的主题选择与练习方向，但**未按原教程段落或 TODO 顺序复写**；所有图示、文字组织、公式推导、代码接口和实验叙事均为本笔记的独立教学整理。[\[3\]][3] [\[4\]][4]
+本文是围绕 **DataWhale** 两份学习材料重新编排的原创学习笔记。DataWhale 通过开源学习模式提供 AI 学习路线、课程与社群连接；如果你希望系统学习相关主题，可以从其[官方网站](https://www.datawhale.cn/)和 [GitHub 组织页](https://github.com/datawhalechina)进入。本文特别参考了《GPU 物理架构与内存层级》和《FlashAttention 模拟》两份教程的主题选择与练习方向，但**未按原教程段落或 TODO 顺序复写**；所有图示、文字组织、公式推导、代码接口和实验叙事均为本笔记的独立教学整理。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb)
 
 建议按照“**看图建立直觉 → 用公式守住不变量 → 跑代码验证等价性 → 再回到硬件审视 IO**”的顺序学习。这样可以避免把 FlashAttention 误解为某个神秘的 API，或者误解成把 attention 的二次计算复杂度直接改成了线性。
 
@@ -31,7 +31,7 @@
 
 ## 1. 先建立硬件直觉：GPU 是一座“搬运距离决定效率”的工厂
 
-GPU 的高吞吐来自大量并行计算单元，尤其是适合矩阵乘加（MMA）的 Tensor Core。但计算单元能否持续工作，不只取决于峰值 FLOPs，还取决于数据能否以足够快的速度送到它附近。V100 引入 Tensor Core 后，GPU 架构持续围绕混合精度矩阵计算、片上数据复用、显存带宽与设备互连演进；Hopper 进一步提供 Tensor Memory Accelerator（TMA）、线程块簇以及异步数据搬运机制。[\[3\]][3] [\[7\]][7]
+GPU 的高吞吐来自大量并行计算单元，尤其是适合矩阵乘加（MMA）的 Tensor Core。但计算单元能否持续工作，不只取决于峰值 FLOPs，还取决于数据能否以足够快的速度送到它附近。V100 引入 Tensor Core 后，GPU 架构持续围绕混合精度矩阵计算、片上数据复用、显存带宽与设备互连演进；Hopper 进一步提供 Tensor Memory Accelerator（TMA）、线程块簇以及异步数据搬运机制。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[7\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
 
 ![图 1：GPU 存储层级的“近算力、小容量”与“远算力、大容量”直觉。](./figures/01_gpu_memory_factory_final.png)
 
@@ -46,7 +46,7 @@ GPU 的高吞吐来自大量并行计算单元，尤其是适合矩阵乘加（M
 | **L2 Cache** | 多个 SM 共用的缓冲区 | 缓冲重复的全局内存访问 | 有帮助但通常不能成为算法正确性的假设；访问局部性仍然重要。 |
 | **HBM / Global Memory** | 大仓库 | 保存模型权重、输入输出和大规模张量 | 容量、带宽都很强，但相对 Tensor Core 的吞吐仍可能不够。 |
 
-H100 SXM 的官方规格列出 3.35 TB/s 的 GPU 内存带宽和 900 GB/s 的 NVLink 互连带宽；这些高数字并不等于任意算子都能“免费访问”数据，反而说明持续增长的矩阵计算吞吐会更迫切地要求片上复用。[\[6\]][6] 例如，若多个逐元素算子都分别从 HBM 读取同一个大张量、处理后再写回，程序可能主要花时间在搬数据而非运算。
+H100 SXM 的官方规格列出 3.35 TB/s 的 GPU 内存带宽和 900 GB/s 的 NVLink 互连带宽；这些高数字并不等于任意算子都能“免费访问”数据，反而说明持续增长的矩阵计算吞吐会更迫切地要求片上复用。[\[6\]](https://www.nvidia.com/en-us/data-center/h100/) 例如，若多个逐元素算子都分别从 HBM 读取同一个大张量、处理后再写回，程序可能主要花时间在搬数据而非运算。
 
 ### 1.2 用算术强度而不是“算子名称”判断瓶颈
 
@@ -97,7 +97,7 @@ $$
 | 概率 `P` | $H\times N\times N$ | $HN^2$ | $O(N^2)$ |
 | 输出 `O` | $N\times H\times d$ | $NHd$ | $O(N)$ |
 
-在配套代码的设定中，`H=32`、`d=128`、FP16/BF16。`N=4096` 时，单独的 score 张量就约为 **1024 MiB**，score 与概率合计约为 **2048 MiB**；当 `N` 加倍时，这两项约增至四倍。真实训练的峰值还要叠加反向传播、框架临时张量和模型其余层，因此表格是“看清 N² 来源”的下界式教学估算，而不是部署预算。[\[3\]][3] [\[4\]][4]
+在配套代码的设定中，`H=32`、`d=128`、FP16/BF16。`N=4096` 时，单独的 score 张量就约为 **1024 MiB**，score 与概率合计约为 **2048 MiB**；当 `N` 加倍时，这两项约增至四倍。真实训练的峰值还要叠加反向传播、框架临时张量和模型其余层，因此表格是“看清 N² 来源”的下界式教学估算，而不是部署预算。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb)
 
 ### 2.2 先分清三种复杂度，避免过度宣传
 
@@ -106,9 +106,9 @@ $$
 | 数学结果 | 精确 attention | 仍是精确 attention，不是近似替代品。 |
 | 主导计算量 | `QKᵀ` 和 `PV` 仍为二次量级 | 没有神奇消除主要矩阵乘法 FLOPs。 |
 | 大型中间激活 | 会显式持有 `N×N` score/probability | 不物化完整 score/probability，额外行级状态保持线性规模。 |
-| HBM IO | 中间量可能多次写出、读回 | 以 tiling 减少 HBM 与片上 SRAM 间的读写。[\[5\]][5] |
+| HBM IO | 中间量可能多次写出、读回 | 以 tiling 减少 HBM 与片上 SRAM 间的读写。[\[5\]](https://arxiv.org/abs/2205.14135) |
 
-FlashAttention 原论文将此视作 **IO-aware exact attention**：优化目标不只是做更少的算术，而是显式考虑 HBM 与片上 SRAM 之间的访问。[\[5\]][5] 这也说明它比“把 softmax 换成别的近似函数”更贴近系统优化的本质。
+FlashAttention 原论文将此视作 **IO-aware exact attention**：优化目标不只是做更少的算术，而是显式考虑 HBM 与片上 SRAM 之间的访问。[\[5\]](https://arxiv.org/abs/2205.14135) 这也说明它比“把 softmax 换成别的近似函数”更贴近系统优化的本质。
 
 ---
 
@@ -321,7 +321,7 @@ python3 flashattention_learning_lab.py
 
 ## 5. 从这个模拟器走向生产 Kernel：还缺少什么？
 
-生产级 FlashAttention 不是把上面的双层 `for` 循环搬到 GPU 就结束了。真正的 kernel 需要让 tile 在合适的 SM 上执行、让数据从 HBM 有序进入共享内存/寄存器、让矩阵乘法走高吞吐路径，并将软最大值归约、mask、dropout（训练时）与 `PV` 尽可能融合到少量 kernel 中。原始 FlashAttention 论文正是以减少 HBM 与 SRAM 间访问为中心设计这一过程。[\[5\]][5]
+生产级 FlashAttention 不是把上面的双层 `for` 循环搬到 GPU 就结束了。真正的 kernel 需要让 tile 在合适的 SM 上执行、让数据从 HBM 有序进入共享内存/寄存器、让矩阵乘法走高吞吐路径，并将软最大值归约、mask、dropout（训练时）与 `PV` 尽可能融合到少量 kernel 中。原始 FlashAttention 论文正是以减少 HBM 与 SRAM 间访问为中心设计这一过程。[\[5\]](https://arxiv.org/abs/2205.14135)
 
 | 教学模拟器中的对象 | 真实 kernel 中的对应问题 | 需要的工程能力 |
 | --- | --- | --- |
@@ -331,11 +331,11 @@ python3 flashattention_learning_lab.py
 | `max/sum/exp` | 如何降低非矩阵部分的开销 | warp 级归约、向量化、算子融合 |
 | `output = numerator / mass` | 如何减少额外读写 | 在寄存器中保留累积器，仅写回最终输出 |
 
-Hopper 的 TMA 能在全局内存与共享内存间高效搬运大块数据，异步执行与线程块簇则给“搬运、计算、同步重叠”提供了更丰富的硬件表达方式。[\[7\]][7] 这正是 FlashAttention 的硬件含义：不是让算法脱离硬件，而是让算法的中间状态规模和搬运顺序更符合硬件层级。
+Hopper 的 TMA 能在全局内存与共享内存间高效搬运大块数据，异步执行与线程块簇则给“搬运、计算、同步重叠”提供了更丰富的硬件表达方式。[\[7\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/) 这正是 FlashAttention 的硬件含义：不是让算法脱离硬件，而是让算法的中间状态规模和搬运顺序更符合硬件层级。
 
 ### 5.1 关于 FlashAttention 版本演进的正确打开方式
 
-版本名不应成为死记硬背题。更可靠的理解方式是用同一张问题清单观察改进：**是否减少了非矩阵部分？是否改善了线程块工作划分？是否更好重叠数据搬运和 Tensor Core 计算？是否针对新架构增加了可利用的异步路径？** DataWhale 的模拟教程将 V1 的 tiling/online softmax、V2 的工作划分优化，以及面向 Hopper 的异步特性放在同一条演进线上；学习时更应抓住这组可迁移的问题，而不是把实现细节当作不变结论。[\[4\]][4]
+版本名不应成为死记硬背题。更可靠的理解方式是用同一张问题清单观察改进：**是否减少了非矩阵部分？是否改善了线程块工作划分？是否更好重叠数据搬运和 Tensor Core 计算？是否针对新架构增加了可利用的异步路径？** DataWhale 的模拟教程将 V1 的 tiling/online softmax、V2 的工作划分优化，以及面向 Hopper 的异步特性放在同一条演进线上；学习时更应抓住这组可迁移的问题，而不是把实现细节当作不变结论。[\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb)
 
 ---
 
@@ -354,7 +354,7 @@ Hopper 的 TMA 能在全局内存与共享内存间高效搬运大块数据，�
 
 ### 6.2 单卡 IO 优化以后，瓶颈会迁移
 
-当单卡 attention 的 HBM IO 被优化，端到端系统不一定就自动变快。大模型可能在 KV Cache、权重带宽、跨 GPU All-Reduce/All-Gather 或网络通信上受限。节点内 NVLink 与 PCIe 的带宽差异会影响跨卡数据移动，H100 SXM 的官方规格列出 900 GB/s NVLink；但是否能接近这个数仍取决于拓扑、通信库、数据规模和计算通信重叠。[\[6\]][6]
+当单卡 attention 的 HBM IO 被优化，端到端系统不一定就自动变快。大模型可能在 KV Cache、权重带宽、跨 GPU All-Reduce/All-Gather 或网络通信上受限。节点内 NVLink 与 PCIe 的带宽差异会影响跨卡数据移动，H100 SXM 的官方规格列出 900 GB/s NVLink；但是否能接近这个数仍取决于拓扑、通信库、数据规模和计算通信重叠。[\[6\]](https://www.nvidia.com/en-us/data-center/h100/)
 
 > **自己的判断顺序：** 先问“瓶颈是计算、HBM、还是通信”；再问“这个瓶颈是否处在关键路径”；最后才决定应该改算法、改 kernel、改并行策略还是改系统拓扑。仅凭某个名词“FlashAttention”“NVLink”“Tensor Core”无法替代测量。
 
@@ -392,12 +392,12 @@ Online Softmax 的答案是肯定的。`m`、`ℓ` 和 `ν` 是足够状态；`e
 
 ## 参考资料
 
-[1]: https://www.datawhale.cn/ "DataWhale 官方网站"
-[2]: https://github.com/datawhalechina "DataWhale GitHub 组织"
-[3]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb "DataWhale：GPU 物理架构与内存层级"
-[4]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb "DataWhale：FlashAttention 模拟"
-[5]: https://arxiv.org/abs/2205.14135 "Dao et al. FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness, 2022"
-[6]: https://www.nvidia.com/en-us/data-center/h100/ "NVIDIA H100 GPU 官方规格"
-[7]: https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/ "NVIDIA Hopper Architecture In-Depth"
+1. [DataWhale 官方网站](https://www.datawhale.cn/)
+2. [DataWhale GitHub 组织](https://github.com/datawhalechina)
+3. [DataWhale：GPU 物理架构与内存层级](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb)
+4. [DataWhale：FlashAttention 模拟](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb)
+5. [Dao et al. FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness, 2022](https://arxiv.org/abs/2205.14135)
+6. [NVIDIA H100 GPU 官方规格](https://www.nvidia.com/en-us/data-center/h100/)
+7. [NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
 
-> **使用提示：** 本文的配图用于解释概念和数据流，不是硬件规格图或真实性能基准。将任何 tile、精度或版本结论用于真实训练/推理前，请针对目标 GPU、模型形状与软件栈进行 profiling。
+**使用提示。** 本文的配图用于解释概念和数据流，不是硬件规格图或真实性能基准。将任何 tile、精度或版本结论用于真实训练/推理前，请针对目标 GPU、模型形状与软件栈进行 profiling。
