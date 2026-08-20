@@ -36,14 +36,14 @@ DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源
 
 ## 一分钟结论
 
-**FlashAttention 没有把注意力从二次计算变成线性计算。** 对单头自注意力而言，计算 $QK^\top$ 仍需要二次量级的乘加；它改变的是 **何时保存什么、在哪一级存储器中复用什么**。原始论文将其称为 *IO-aware exact attention*：通过 tiling 减少 GPU 高带宽显存（HBM）与片上 SRAM 之间的读写，同时保持结果精确。[\[4\]](https://arxiv.org/abs/2205.14135)
+**FlashAttention 没有把注意力从二次计算变成线性计算。** 对单头自注意力而言，计算 $`QK^\top`$ 仍需要二次量级的乘加；它改变的是 **何时保存什么、在哪一级存储器中复用什么**。原始论文将其称为 *IO-aware exact attention*：通过 tiling 减少 GPU 高带宽显存（HBM）与片上 SRAM 之间的读写，同时保持结果精确。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 | 问题 | 常规实现 | FlashAttention 的回答 |
 | --- | --- | --- |
-| 要不要构造 $N\times N$ score？ | 常常把完整 $S$ 作为中间张量物化 | 只构造一个小的 $S_{ij}$ tile，随后立即消费 |
-| softmax 能否逐块做？ | 直觉上不能：整行最大值和分母尚未知 | 能：维护运行最大值 $m$ 与重标尺后的指数和 $\ell$ |
-| 输出如何累加？ | 先得到完整 $P$，再算 $PV$ | 同时维护未归一化分子 $n$，最后只做一次 $n/\ell$ |
-| 前向峰值 score 工作集 | $O(N^2)$ 元素 | 固定 tile 下为 $O(T_QT_K)$ 元素；连同输入输出与行状态为 $O(Nd + T_QT_K)$ |
+| 要不要构造 $`N\times N`$ score？ | 常常把完整 $`S`$ 作为中间张量物化 | 只构造一个小的 $`S_{ij}`$ tile，随后立即消费 |
+| softmax 能否逐块做？ | 直觉上不能：整行最大值和分母尚未知 | 能：维护运行最大值 $`m`$ 与重标尺后的指数和 $`\ell`$ |
+| 输出如何累加？ | 先得到完整 $`P`$，再算 $`PV`$ | 同时维护未归一化分子 $`n`$，最后只做一次 $`n/\ell`$ |
+| 前向峰值 score 工作集 | $`O(N^2)`$ 元素 | 固定 tile 下为 $`O(T_QT_K)`$ 元素；连同输入输出与行状态为 $`O(Nd + T_QT_K)`$ |
 | 是不是近似算法？ | 不适用 | **不是。** 分块顺序改变，数学目标不改变。[\[4\]](https://arxiv.org/abs/2205.14135) |
 
 > **最值得带走的一句话：** FlashAttention 的关键不是“少算一个矩阵”，而是“让这个矩阵的每一个小块刚产生就被归约掉，不再长期占据 HBM”。
@@ -52,17 +52,17 @@ DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源
 
 ## 符号、形状与标准 Attention
 
-设批大小为 $B$、注意力头数为 $H$、序列长度为 $N$、每头 query/key 维度为 $d_k$、value 维度为 $d_v$。为了突出核心推导，本文的主函数先只处理单头、单样本的二维张量；批和头只是外层可并行维度。
+设批大小为 $`B`$、注意力头数为 $`H`$、序列长度为 $`N`$、每头 query/key 维度为 $`d_k`$、value 维度为 $`d_v`$。为了突出核心推导，本文的主函数先只处理单头、单样本的二维张量；批和头只是外层可并行维度。
 
 | 符号 | 形状（单头、单样本） | 含义 |
 | --- | --- | --- |
-| $Q$ | $N\times d_k$ | Query 矩阵 |
-| $K$ | $N\times d_k$ | Key 矩阵 |
-| $V$ | $N\times d_v$ | Value 矩阵 |
-| $S$ | $N\times N$ | 缩放前/后的 attention score |
-| $P$ | $N\times N$ | 对 score 的行 softmax 结果 |
-| $O$ | $N\times d_v$ | 注意力输出 |
-| $T_Q,T_K$ | tile 尺寸 | 一个 Q 块和一个 K/V 块的行数 |
+| $`Q`$ | $`N\times d_k`$ | Query 矩阵 |
+| $`K`$ | $`N\times d_k`$ | Key 矩阵 |
+| $`V`$ | $`N\times d_v`$ | Value 矩阵 |
+| $`S`$ | $`N\times N`$ | 缩放前/后的 attention score |
+| $`P`$ | $`N\times N`$ | 对 score 的行 softmax 结果 |
+| $`O`$ | $`N\times d_v`$ | 注意力输出 |
+| $`T_Q,T_K`$ | tile 尺寸 | 一个 Q 块和一个 K/V 块的行数 |
 
 缩放点积注意力写成：
 
@@ -72,7 +72,7 @@ P = \text{softmax}(S),\qquad
 O = PV.
 $$
 
-其中 softmax 沿每行归一化。因果自注意力还会把未来位置置为 $-\infty$，使其指数权重为零。这个基础公式没有改变；变化的是执行路线。
+其中 softmax 沿每行归一化。因果自注意力还会把未来位置置为 $`-\infty`$，使其指数权重为零。这个基础公式没有改变；变化的是执行路线。
 
 ```python
 # Dense reference: clear but intentionally materializes an N x N score tensor.
@@ -85,7 +85,7 @@ def reference_attention(q, k, v, *, causal=False):
     return probabilities @ v
 ```
 
-这段实现是**正确性基线**。`scores` 与 `probabilities` 都是 $N\times N$；在训练中，自动求导还可能需要额外保存或重算中间信息。FlashAttention 的前向重点不是否认这些数学对象，而是避免将完整矩阵作为持久的中间结果写入慢一层的存储器。[\[4\]](https://arxiv.org/abs/2205.14135)
+这段实现是**正确性基线**。`scores` 与 `probabilities` 都是 $`N\times N`$；在训练中，自动求导还可能需要额外保存或重算中间信息。FlashAttention 的前向重点不是否认这些数学对象，而是避免将完整矩阵作为持久的中间结果写入慢一层的存储器。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 ---
 
@@ -95,19 +95,19 @@ GPU 的 HBM 容量很大，却离计算单元更远；寄存器与片上 SRAM �
 
 ![HBM、SRAM 与临时 score tile 的概念图](assets/ai_figures/flashattention_memory_hierarchy.png)
 
-### 一个可计算的量级：$N^2$ 是怎么“爆炸”的？
+### 一个可计算的量级：$`N^2`$ 是怎么“爆炸”的？
 
-只统计 score 张量 $S$，若使用 FP16/BF16（每元素 2 bytes），其字节数为：
+只统计 score 张量 $`S`$，若使用 FP16/BF16（每元素 2 bytes），其字节数为：
 
 $$
 M_S = B\cdot H\cdot N^2\cdot 2\;\text{bytes}.
 $$
 
-下面的图固定 $B=1$、$H=32$，并且**只**计算一个 score 张量；它没有把 $P$、Q/K/V、输出、梯度和框架工作区算进去。因此，这是一张保守的量级图，而非端到端显存测量。
+下面的图固定 $`B=1`$、$`H=32`$，并且**只**计算一个 score 张量；它没有把 $`P`$、Q/K/V、输出、梯度和框架工作区算进去。因此，这是一张保守的量级图，而非端到端显存测量。
 
 ![score 张量的二次方内存增长](assets/plots/quadratic_score_memory.png)
 
-| 序列长度 $N$ | $N^2$ | 单个 score 张量（$B=1,H=32$，FP16） | 读图提示 |
+| 序列长度 $`N`$ | $`N^2`$ | 单个 score 张量（$`B=1,H=32`$，FP16） | 读图提示 |
 | ---: | ---: | ---: | --- |
 | 1,024 | 1,048,576 | 0.0625 GiB | 仍相对轻量 |
 | 4,096 | 16,777,216 | 1 GiB | 仅 score 已达到 GiB 级 |
@@ -115,33 +115,33 @@ $$
 | 16,384 | 268,435,456 | 16 GiB | 长上下文极易被中间态压垮 |
 | 32,768 | 1,073,741,824 | 64 GiB | 只一个 score 张量就超出许多设备可用空间 |
 
-这里的表格展示了一个经常被忽略的事实：**越长的上下文，越不能只用 FLOPs 解释性能。** 即使矩阵乘法本身可以高效执行，将大张量写到 HBM、再读回做归约和与 $V$ 相乘，也可能把吞吐拖入带宽受限区域。[\[4\]](https://arxiv.org/abs/2205.14135)
+这里的表格展示了一个经常被忽略的事实：**越长的上下文，越不能只用 FLOPs 解释性能。** 即使矩阵乘法本身可以高效执行，将大张量写到 HBM、再读回做归约和与 $`V`$ 相乘，也可能把吞吐拖入带宽受限区域。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 ---
 
 ## FlashAttention 如何重新安排计算
 
-FlashAttention 把 $Q,K,V$ 切为可放进片上工作空间的小块。对某个 $Q_i$，固定它在 SRAM 中；随后顺序读取每个 $K_j,V_j$，生成临时分数块：
+FlashAttention 把 $`Q,K,V`$ 切为可放进片上工作空间的小块。对某个 $`Q_i`$，固定它在 SRAM 中；随后顺序读取每个 $`K_j,V_j`$，生成临时分数块：
 
 $$
 S_{ij}=\frac{Q_iK_j^\top}{\sqrt{d_k}},\qquad
 S_{ij}\in\mathbb{R}^{T_Q\times T_K}.
 $$
 
-关键是：**$S_{ij}$ 被立即用于更新行级统计量和输出贡献，然后即可释放。** 它不会拼回完整的 $S$。这正是“tile 工作集”与“完整中间张量”之间的区别。
+关键是：**$`S_{ij}`$ 被立即用于更新行级统计量和输出贡献，然后即可释放。** 它不会拼回完整的 $`S`$。这正是“tile 工作集”与“完整中间张量”之间的区别。
 
 ![固定 Q tile、流动 K/V tile 的分块调度](assets/ai_figures/tiled_attention_schedule.png)
 
 ### 一个 Q tile 的执行日程
 
-| 阶段 | 留在片上/寄存器的内容 | 从 HBM 流入或写出 | 是否保留完整 $N\times N$ 张量 |
+| 阶段 | 留在片上/寄存器的内容 | 从 HBM 流入或写出 | 是否保留完整 $`N\times N`$ 张量 |
 | --- | --- | --- | --- |
-| 选中 $Q_i$ | $Q_i$、输出分子 $n_i$、$m_i$、$\ell_i$ | 读入 $Q_i$ | 否 |
-| 扫描第 $j$ 个 K/V tile | $Q_i,K_j,V_j,S_{ij}$ | 读入 $K_j,V_j$ | 否，$S_{ij}$ 立刻消费 |
-| 更新在线状态 | $m_i,\ell_i,n_i$ | 无需写回 score | 否 |
-| 扫描结束 | $O_i=n_i/\ell_i$ | 写出 $O_i$ | 否 |
+| 选中 $`Q_i`$ | $`Q_i`$、输出分子 $`n_i`$、$`m_i`$、$`\ell_i`$ | 读入 $`Q_i`$ | 否 |
+| 扫描第 $`j`$ 个 K/V tile | $`Q_i,K_j,V_j,S_{ij}`$ | 读入 $`K_j,V_j`$ | 否，$`S_{ij}`$ 立刻消费 |
+| 更新在线状态 | $`m_i,\ell_i,n_i`$ | 无需写回 score | 否 |
+| 扫描结束 | $`O_i=n_i/\ell_i`$ | 写出 $`O_i`$ | 否 |
 
-若 $T_Q=T_K=T$，则最大 score tile 仅含 $T^2$ 个元素。注意，这个说法仅比较 **score 工作集**：实际内核还要容纳 Q/K/V tile、输出累加器和行状态。更严谨地说，在固定头维时，前向临时状态从持久的二次 score/probability 张量，转为输入输出的线性量加上一个受 tile 尺寸控制的小工作集。
+若 $`T_Q=T_K=T`$，则最大 score tile 仅含 $`T^2`$ 个元素。注意，这个说法仅比较 **score 工作集**：实际内核还要容纳 Q/K/V tile、输出累加器和行状态。更严谨地说，在固定头维时，前向临时状态从持久的二次 score/probability 张量，转为输入输出的线性量加上一个受 tile 尺寸控制的小工作集。
 
 ---
 
@@ -149,7 +149,7 @@ $$
 
 ### 先回顾稳定 softmax
 
-对一行 score $x$，直接算 $\exp(x)$ 容易溢出。因此选取该行最大值 $m=\max_jx_j$：
+对一行 score $`x`$，直接算 $`\exp(x)`$ 容易溢出。因此选取该行最大值 $`m=\max_jx_j`$：
 
 $$
 \text{softmax}(x)_j=
@@ -160,7 +160,7 @@ $$
 
 ### 把已见与新见的块写成同一个坐标系
 
-假设已处理 score 集合为 $A$，其状态为：
+假设已处理 score 集合为 $`A`$，其状态为：
 
 $$
 m_A=\max_{a\in A}a,\qquad
@@ -168,14 +168,14 @@ m_A=\max_{a\in A}a,\qquad
 n_A=\sum_{a\in A}\exp(a-m_A)v_a.
 $$
 
-新 tile 的 score 集合为 $C$。首先用共同的基准重标尺：
+新 tile 的 score 集合为 $`C`$。首先用共同的基准重标尺：
 
 $$
 m_{\text{new}}=\max(m_A,\max_{c\in C}c),\qquad
 \alpha=\exp(m_A-m_{\text{new}}).
 $$
 
-再计算新块相对该基准的未归一化权重 $p_C=\exp(C-m_{\text{new}})$。三项状态更新为：
+再计算新块相对该基准的未归一化权重 $`p_C=\exp(C-m_{\text{new}})`$。三项状态更新为：
 
 $$
 \ell_{\text{new}}=\alpha\ell_A+\sum p_C,
@@ -189,15 +189,15 @@ $$
 O_{\text{new}}=\frac{n_{\text{new}}}{\ell_{\text{new}}}.
 $$
 
-这就是“以前的统计量不丢失”的原因：当新块给出了更大的最大值时，旧统计量统一乘以 $\alpha$，等价于把旧的指数坐标从 $m_A$ 改写到 $m_\text{new}$。整个过程只保留每个 query 行的 $m$、$\ell$ 与 value 维度的 $n$。
+这就是“以前的统计量不丢失”的原因：当新块给出了更大的最大值时，旧统计量统一乘以 $`\alpha`$，等价于把旧的指数坐标从 $`m_A`$ 改写到 $`m_\text{new}`$。整个过程只保留每个 query 行的 $`m`$、$`\ell`$ 与 value 维度的 $`n`$。
 
 ![online softmax 的状态机](assets/ai_figures/online_softmax_state_machine.png)
 
-> **与常见写法的关系。** 有些实现直接维护已经归一化的输出 $O$，每个 tile 都重新缩放旧 $O$ 并除以新的 $\ell$。本文维护未归一化分子 $n$，只在一个 Q tile 的末尾计算 $n/\ell$。两种写法严格等价，因为 $n=\ell O$；后一种组织方式把“重新标尺”显式地集中在分子与分母上，更适合推导与阅读。
+> **与常见写法的关系。** 有些实现直接维护已经归一化的输出 $`O`$，每个 tile 都重新缩放旧 $`O`$ 并除以新的 $`\ell`$。本文维护未归一化分子 $`n`$，只在一个 Q tile 的末尾计算 $`n/\ell`$。两种写法严格等价，因为 $`n=\ell O`$；后一种组织方式把“重新标尺”显式地集中在分子与分母上，更适合推导与阅读。
 
-### 数值陷阱：为什么代码里要处理 $-\infty-(-\infty)$？
+### 数值陷阱：为什么代码里要处理 $`-\infty-(-\infty)`$？
 
-因果掩码会让某些 block 中的全部候选位置无效。这时 `scores` 可能全为 $-inf`，块最大值也是 $-inf`。如果直接计算 `scores - m_new`，就会产生 `-inf - -inf = NaN`。教学实现显式使用 `torch.where`：无效位置的指数输入被替换为 $-\infty$，其指数恰为零；旧状态在尚未见到有效分数时也令缩放系数为零。这个分支不是优化技巧，而是让掩码语义与数值稳定性同时成立的必要防线。
+因果掩码会让某些 block 中的全部候选位置无效。这时 `scores` 可能全为 $`-inf`，块最大值也是 `$-inf`。如果直接计算 `scores - m_new`，就会产生 `-inf - -inf = NaN`。教学实现显式使用 `torch.where`：无效位置的指数输入被替换为 $`-\infty`$，其指数恰为零；旧状态在尚未见到有效分数时也令缩放系数为零。这个分支不是优化技巧，而是让掩码语义与数值稳定性同时成立的必要防线。
 
 ---
 
@@ -213,12 +213,12 @@ $$
 
 | 函数 | 责任 | 最重要的不变量 |
 | --- | --- | --- |
-| `reference_attention` | 物化 $N\times N$ score 的对照结果 | 作为单一正确性基线 |
-| `_causal_mask` | 返回当前 $Q_i,K_j$ tile 的合法关系 | 只允许 $k\le q$ |
+| `reference_attention` | 物化 $`N\times N`$ score 的对照结果 | 作为单一正确性基线 |
+| `_causal_mask` | 返回当前 $`Q_i,K_j`$ tile 的合法关系 | 只允许 $`k\le q`$ |
 | `flash_attention_tiled` | tile + online softmax 的完整前向 | `m,l,n` 始终代表已处理 K/V 块 |
 | `flash_attention_tiled_bh` | 展示 batch/head 外层语义 | 每个 head 都是独立的单头计算 |
 | `verify_forward_equivalence` | 覆盖非整除尾块、因果/非因果情形 | 输出与 dense 对照一致 |
-| `verify_gradients` | 比较 $dQ,dK,dV$ | 反向梯度同样一致 |
+| `verify_gradients` | 比较 $`dQ,dK,dV`$ | 反向梯度同样一致 |
 
 主循环的逻辑可以压缩成如下伪代码：
 
@@ -241,7 +241,7 @@ for Q_i in Q tiles:
 
 ### 已验证什么？
 
-本笔记实际运行了四组前向对照，包括一个块大小不能整除序列长度的情形、一组 causal 情形，以及一组 tile 大于序列长度的边界情形。float64 下最大绝对误差在 $4.441\times10^{-16}$ 以内；另以一个标量投影损失比较 $dQ,dK,dV$，最大绝对误差在 $2.220\times10^{-16}$ 以内。这些结果验证的是本教学实现的数学等价性，而不是 GPU 性能结论。
+本笔记实际运行了四组前向对照，包括一个块大小不能整除序列长度的情形、一组 causal 情形，以及一组 tile 大于序列长度的边界情形。float64 下最大绝对误差在 $`4.441\times10^{-16}`$ 以内；另以一个标量投影损失比较 $`dQ,dK,dV`$，最大绝对误差在 $`2.220\times10^{-16}`$ 以内。这些结果验证的是本教学实现的数学等价性，而不是 GPU 性能结论。
 
 ```text
 N= 8, d_k= 4, B= 2, causal=False | max_abs_error=3.331e-16
@@ -269,11 +269,11 @@ $$
 
 ![分块 score 工作集的理论比值](assets/plots/score_working_set_heatmap.png)
 
-当 $N=32\text{K},T=128$ 时，单个 score tile 相比完整 score 的元素数小 $65{,}536$ 倍。这给出了 FlashAttention 要解决的“中间张量驻留”问题的直觉；但 tile 不能无限缩小，因为更小 tile 也意味着更多循环、更多调度和更弱的矩阵乘法复用。
+当 $`N=32\text{K},T=128`$ 时，单个 score tile 相比完整 score 的元素数小 $`65{,}536`$ 倍。这给出了 FlashAttention 要解决的“中间张量驻留”问题的直觉；但 tile 不能无限缩小，因为更小 tile 也意味着更多循环、更多调度和更弱的矩阵乘法复用。
 
 ### 2. 把公式变成一条看得见的状态轨迹
 
-下一张图不使用随机数据。它将 six-element score 序列 `[-1.1, 0.2, 2.4, -0.3, 3.0, 1.2]` 与对应 value 分成三个大小为 2 的块。左图的 $m$ 与 $\ell$ 在每块后更新；右图显示未归一化分子 $n$ 和当前输出 $n/\ell$ 如何最终落在 dense reference 上。
+下一张图不使用随机数据。它将 six-element score 序列 `[-1.1, 0.2, 2.4, -0.3, 3.0, 1.2]` 与对应 value 分成三个大小为 2 的块。左图的 $`m`$ 与 $`\ell`$ 在每块后更新；右图显示未归一化分子 $`n`$ 和当前输出 $`n/\ell`$ 如何最终落在 dense reference 上。
 
 ![online softmax 的确定性状态轨迹](assets/plots/online_softmax_trace.png)
 
@@ -301,8 +301,8 @@ $$
 
 | 误解 | 更准确的理解 |
 | --- | --- |
-| “FlashAttention 把注意力复杂度变成 $O(N)$。” | **错误。** 主体的 $QK^\top$ 计算仍是二次量级；改善的是中间激活和 I/O 组织。[\[4\]](https://arxiv.org/abs/2205.14135) |
-| “不保存 $S$ 就一定不精确。” | **错误。** 只要在线状态更新正确，最终结果与 dense softmax 相同。 |
+| “FlashAttention 把注意力复杂度变成 $`O(N)`$。” | **错误。** 主体的 $`QK^\top`$ 计算仍是二次量级；改善的是中间激活和 I/O 组织。[\[4\]](https://arxiv.org/abs/2205.14135) |
+| “不保存 $`S`$ 就一定不精确。” | **错误。** 只要在线状态更新正确，最终结果与 dense softmax 相同。 |
 | “block size 越小越好。” | **错误。** 小块降低 score 工作集，却带来更多 tile、循环和调度；实际最优值取决于硬件与内核。 |
 | “这段 PyTorch 循环应当比 torch.softmax 更快。” | **错误。** Python 循环只是解释算法；性能依赖融合 kernel 与硬件映射。 |
 | “因果 mask 只是最后把输出清零。” | **错误。** 它必须在 score 层禁止未来键进入 softmax 分母。 |
@@ -320,7 +320,7 @@ $$
 1. 修改 `block_size` 为 1、2、3、8，打印 `TiledAttentionStats`，区分“tile 数量”和“最大 score 工作集”。
 2. 用随机的 `[batch, heads, sequence, dim]` 输入，调用 `flash_attention_tiled_bh` 并和逐 head 的 dense 实现比较。
 3. 为函数增加 padding mask；注意区分“整行全部无效”的语义与因果 mask 的语义。
-4. 把本文的 `n/\ell` 写法改为每块直接维护归一化输出 $O$，再证明两者关系 $n=\ell O$。
+4. 把本文的 `n/\ell` 写法改为每块直接维护归一化输出 $`O`$，再证明两者关系 $`n=\ell O`$。
 5. 使用 PyTorch profiler 或 CUDA kernel（而不是此 Python 循环）观察真实 I/O 与执行时间；此时才能讨论性能。
 
 ---
