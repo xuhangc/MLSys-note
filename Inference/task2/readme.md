@@ -7,15 +7,15 @@
 
 ## 写在前面：本文与 DataWhale 教程的关系
 
-这份笔记以 DataWhale 的两份教程为学习起点：一份建立 **HBM/SRAM 与工作集** 的直觉，另一份以纯 PyTorch 模拟 **分块计算与 online softmax**。两者的链接都列在下表中。[\[1\]][1] [\[2\]][2] 本文不复述教程行文，也不复制其填空式代码；而是重新组织成一条从公式、内存模型、数学推导到可执行验证的闭环，并新增了因果掩码、梯度核验、精确图表与三张原创概念图。
+这份笔记以 DataWhale 的两份教程为学习起点：一份建立 **HBM/SRAM 与工作集** 的直觉，另一份以纯 PyTorch 模拟 **分块计算与 online softmax**。两者的链接都列在下表中。[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/14_FlashAttention_Memory_Model.ipynb) [\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb) 本文不复述教程行文，也不复制其填空式代码；而是重新组织成一条从公式、内存模型、数学推导到可执行验证的闭环，并新增了因果掩码、梯度核验、精确图表与三张原创概念图。
 
-DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源的社区；若这份笔记对你有帮助，也建议回到其课程和社区继续学习与交流。[\[3\]][3]
+DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源的社区；若这份笔记对你有帮助，也建议回到其课程和社区继续学习与交流。[\[3\]](https://datawhale.cn/)
 
 | 资源 | 用途 | 链接 |
 | --- | --- | --- |
-| DataWhale 社区 | 社区主页与学习路线 | [datawhale.cn][3] |
-| 教程一：显存模型 | 建立 Attention 的 I/O 与分块工作集直觉 | [14_FlashAttention_Memory_Model.ipynb][1] |
-| 教程二：PyTorch 模拟 | 观察分块前向与 online softmax | [20_FlashAttention_Sim.ipynb][2] |
+| DataWhale 社区 | 社区主页与学习路线 | [datawhale.cn](https://datawhale.cn/) |
+| 教程一：显存模型 | 建立 Attention 的 I/O 与分块工作集直觉 | [14_FlashAttention_Memory_Model.ipynb](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/14_FlashAttention_Memory_Model.ipynb) |
+| 教程二：PyTorch 模拟 | 观察分块前向与 online softmax | [20_FlashAttention_Sim.ipynb](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb) |
 | 本文代码 | 可运行的原创教学实现、图表脚本和入口 | [`code/` 与 `scripts/`](#完整源码) |
 
 ## 目录
@@ -36,7 +36,7 @@ DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源
 
 ## 一分钟结论
 
-**FlashAttention 没有把注意力从二次计算变成线性计算。** 对单头自注意力而言，计算 $QK^\top$ 仍需要二次量级的乘加；它改变的是 **何时保存什么、在哪一级存储器中复用什么**。原始论文将其称为 *IO-aware exact attention*：通过 tiling 减少 GPU 高带宽显存（HBM）与片上 SRAM 之间的读写，同时保持结果精确。[\[4\]][4]
+**FlashAttention 没有把注意力从二次计算变成线性计算。** 对单头自注意力而言，计算 $QK^\top$ 仍需要二次量级的乘加；它改变的是 **何时保存什么、在哪一级存储器中复用什么**。原始论文将其称为 *IO-aware exact attention*：通过 tiling 减少 GPU 高带宽显存（HBM）与片上 SRAM 之间的读写，同时保持结果精确。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 | 问题 | 常规实现 | FlashAttention 的回答 |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源
 | softmax 能否逐块做？ | 直觉上不能：整行最大值和分母尚未知 | 能：维护运行最大值 $m$ 与重标尺后的指数和 $\ell$ |
 | 输出如何累加？ | 先得到完整 $P$，再算 $PV$ | 同时维护未归一化分子 $n$，最后只做一次 $n/\ell$ |
 | 前向峰值 score 工作集 | $O(N^2)$ 元素 | 固定 tile 下为 $O(T_QT_K)$ 元素；连同输入输出与行状态为 $O(Nd + T_QT_K)$ |
-| 是不是近似算法？ | 不适用 | **不是。** 分块顺序改变，数学目标不改变。[\[4\]][4] |
+| 是不是近似算法？ | 不适用 | **不是。** 分块顺序改变，数学目标不改变。[\[4\]](https://arxiv.org/abs/2205.14135) |
 
 > **最值得带走的一句话：** FlashAttention 的关键不是“少算一个矩阵”，而是“让这个矩阵的每一个小块刚产生就被归约掉，不再长期占据 HBM”。
 
@@ -85,13 +85,13 @@ def reference_attention(q, k, v, *, causal=False):
     return probabilities @ v
 ```
 
-这段实现是**正确性基线**。`scores` 与 `probabilities` 都是 $N\times N$；在训练中，自动求导还可能需要额外保存或重算中间信息。FlashAttention 的前向重点不是否认这些数学对象，而是避免将完整矩阵作为持久的中间结果写入慢一层的存储器。[\[4\]][4]
+这段实现是**正确性基线**。`scores` 与 `probabilities` 都是 $N\times N$；在训练中，自动求导还可能需要额外保存或重算中间信息。FlashAttention 的前向重点不是否认这些数学对象，而是避免将完整矩阵作为持久的中间结果写入慢一层的存储器。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 ---
 
 ## 真正的痛点：不是公式，而是 I/O
 
-GPU 的 HBM 容量很大，却离计算单元更远；寄存器与片上 SRAM 容量小得多，却更接近计算。原始 FlashAttention 的洞见是：在给定算术量的情况下，HBM 与 SRAM 之间的数据移动本身会成为决定性成本，因此应将其纳入算法设计。[\[4\]][4]
+GPU 的 HBM 容量很大，却离计算单元更远；寄存器与片上 SRAM 容量小得多，却更接近计算。原始 FlashAttention 的洞见是：在给定算术量的情况下，HBM 与 SRAM 之间的数据移动本身会成为决定性成本，因此应将其纳入算法设计。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 ![HBM、SRAM 与临时 score tile 的概念图](assets/ai_figures/flashattention_memory_hierarchy.png)
 
@@ -115,7 +115,7 @@ $$
 | 16,384 | 268,435,456 | 16 GiB | 长上下文极易被中间态压垮 |
 | 32,768 | 1,073,741,824 | 64 GiB | 只一个 score 张量就超出许多设备可用空间 |
 
-这里的表格展示了一个经常被忽略的事实：**越长的上下文，越不能只用 FLOPs 解释性能。** 即使矩阵乘法本身可以高效执行，将大张量写到 HBM、再读回做归约和与 $V$ 相乘，也可能把吞吐拖入带宽受限区域。[\[4\]][4]
+这里的表格展示了一个经常被忽略的事实：**越长的上下文，越不能只用 FLOPs 解释性能。** 即使矩阵乘法本身可以高效执行，将大张量写到 HBM、再读回做归约和与 $V$ 相乘，也可能把吞吐拖入带宽受限区域。[\[4\]](https://arxiv.org/abs/2205.14135)
 
 ---
 
@@ -207,7 +207,7 @@ $$
 
 本文代码在 CPU 或 GPU 上均可运行，但它的嵌套 Python 循环**不会**比 PyTorch 的优化 dense attention 更快。它的价值在于将生产内核的数学不变量摊开：你可以逐步检查 tile 如何被消费、状态如何更新、因果掩码如何作用，以及输出和梯度如何同标准 Attention 一致。
 
-生产级 FlashAttention 需要 CUDA/Triton 层的共享内存、寄存器、warp 调度、向量化和流水线；因此，请把下述实现视为 **algorithm simulator**，而不是 benchmark kernel。原始工作与后续版本都以硬件 I/O、并行划分和异步流水线为优化对象。[\[4\]][4] [\[5\]][5] [\[6\]][6]
+生产级 FlashAttention 需要 CUDA/Triton 层的共享内存、寄存器、warp 调度、向量化和流水线；因此，请把下述实现视为 **algorithm simulator**，而不是 benchmark kernel。原始工作与后续版本都以硬件 I/O、并行划分和异步流水线为优化对象。[\[4\]](https://arxiv.org/abs/2205.14135) [\[5\]](https://arxiv.org/abs/2307.08691) [\[6\]](https://arxiv.org/abs/2407.08608)
 
 ### 核心函数逐段阅读
 
@@ -287,11 +287,11 @@ $$
 
 | 版本 | 核心关注 | 代表性改进 | 与本文的联系 |
 | --- | --- | --- | --- |
-| FlashAttention (V1) | HBM/SRAM I/O | 分块、在线重标尺、避免持久化完整 attention matrix | 本文的主线；精确但 IO-aware。[\[4\]][4] |
-| FlashAttention-2 | GPU 工作划分与占用 | 减少 non-matmul FLOPs；跨 thread block 并行单头计算；减少共享内存通信 | “正确公式”之外，还要优化谁做什么、在哪儿做。[\[5\]][5] |
-| FlashAttention-3 | Hopper 异步能力与低精度 | Tensor Core/TMA 异步重叠、block-wise matmul-softmax 交错、FP8 相关策略 | 内核把数据搬运与计算做成流水线，而非 Python 双循环。[\[6\]][6] |
+| FlashAttention (V1) | HBM/SRAM I/O | 分块、在线重标尺、避免持久化完整 attention matrix | 本文的主线；精确但 IO-aware。[\[4\]](https://arxiv.org/abs/2205.14135) |
+| FlashAttention-2 | GPU 工作划分与占用 | 减少 non-matmul FLOPs；跨 thread block 并行单头计算；减少共享内存通信 | “正确公式”之外，还要优化谁做什么、在哪儿做。[\[5\]](https://arxiv.org/abs/2307.08691) |
+| FlashAttention-3 | Hopper 异步能力与低精度 | Tensor Core/TMA 异步重叠、block-wise matmul-softmax 交错、FP8 相关策略 | 内核把数据搬运与计算做成流水线，而非 Python 双循环。[\[6\]](https://arxiv.org/abs/2407.08608) |
 
-论文摘要报告，V2 的设计针对非矩阵乘法开销、工作划分与共享内存通信，并在 A100 上提升利用率；V3 进一步针对 Hopper 的 Tensor Core 异步、TMA 和 FP8 能力。这里列出它们是为了给出技术脉络，而非暗示本文 CPU-friendly 仿真复刻了这些硬件特性。[\[5\]][5] [\[6\]][6]
+论文摘要报告，V2 的设计针对非矩阵乘法开销、工作划分与共享内存通信，并在 A100 上提升利用率；V3 进一步针对 Hopper 的 Tensor Core 异步、TMA 和 FP8 能力。这里列出它们是为了给出技术脉络，而非暗示本文 CPU-friendly 仿真复刻了这些硬件特性。[\[5\]](https://arxiv.org/abs/2307.08691) [\[6\]](https://arxiv.org/abs/2407.08608)
 
 ---
 
@@ -301,7 +301,7 @@ $$
 
 | 误解 | 更准确的理解 |
 | --- | --- |
-| “FlashAttention 把注意力复杂度变成 $O(N)$。” | **错误。** 主体的 $QK^\top$ 计算仍是二次量级；改善的是中间激活和 I/O 组织。[\[4\]][4] |
+| “FlashAttention 把注意力复杂度变成 $O(N)$。” | **错误。** 主体的 $QK^\top$ 计算仍是二次量级；改善的是中间激活和 I/O 组织。[\[4\]](https://arxiv.org/abs/2205.14135) |
 | “不保存 $S$ 就一定不精确。” | **错误。** 只要在线状态更新正确，最终结果与 dense softmax 相同。 |
 | “block size 越小越好。” | **错误。** 小块降低 score 工作集，却带来更多 tile、循环和调度；实际最优值取决于硬件与内核。 |
 | “这段 PyTorch 循环应当比 torch.softmax 更快。” | **错误。** Python 循环只是解释算法；性能依赖融合 kernel 与硬件映射。 |
@@ -811,14 +811,14 @@ pip install torch numpy matplotlib
 python code/run_demo.py
 ```
 
-> **图像说明。** `assets/ai_figures/` 内的三张概念图由 GPT Image 2 为本文原创生成，用于传达存储层级、状态流和 tile 调度；`assets/plots/` 内的图表由所附脚本根据明确公式和固定数值生成。概念图不承担精确数值或内核时序证明，定量结论应以公式、源代码和论文为准。
+**图像说明。** `assets/ai_figures/` 内的三张概念图由 GPT Image 2 为本文原创生成，用于传达存储层级、状态流和 tile 调度；`assets/plots/` 内的图表由所附脚本根据明确公式和固定数值生成。概念图不承担精确数值或内核时序证明，定量结论应以公式、源代码和论文为准。
 
 ### References
 
-[1]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/14_FlashAttention_Memory_Model.ipynb "DataWhale LLM Algo LeetCode — FlashAttention Memory Model"
-[2]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb "DataWhale LLM Algo LeetCode — FlashAttention Sim"
-[3]: https://datawhale.cn/ "DataWhale 社区"
-[4]: https://arxiv.org/abs/2205.14135 "Dao et al. — FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness (2022)"
-[5]: https://arxiv.org/abs/2307.08691 "Dao — FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning (2023)"
-[6]: https://arxiv.org/abs/2407.08608 "Shah et al. — FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision (2024)"
+1. [DataWhale LLM Algo LeetCode — FlashAttention Memory Model](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/14_FlashAttention_Memory_Model.ipynb)
+2. [DataWhale LLM Algo LeetCode — FlashAttention Sim](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/20_FlashAttention_Sim.ipynb)
+3. [DataWhale 社区](https://datawhale.cn/)
+4. [Dao et al. — FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness (2022)](https://arxiv.org/abs/2205.14135)
+5. [Dao — FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning (2023)](https://arxiv.org/abs/2307.08691)
+6. [Shah et al. — FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision (2024)](https://arxiv.org/abs/2407.08608)
 
