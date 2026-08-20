@@ -31,7 +31,7 @@
 
 这不是对原教程的逐段转写，而是一份围绕“**为什么显存会满、每种策略究竟改变了什么、怎样验证它没有改坏训练语义**”重新组织的学习笔记。原教程将梯度累积、检查点与卸载拆成三项独立练习；本文则把它们放入同一张显存账本中，通过一套完整脚本把概念、代码正确性与实际性能测量连起来。
 
-Datawhale 以开源学习模式提供课程、学习路线与实践资源，[1] 本文选取的三份 Notebook 分别对应梯度累积、激活检查点与激活卸载。[2] [3] [4] 强烈建议在读完本笔记后回到原教程完成其中的练习，再运行本文的整合实验做对照。
+Datawhale 以开源学习模式提供课程、学习路线与实践资源，[\[1\]][1] 本文选取的三份 Notebook 分别对应梯度累积、激活检查点与激活卸载。[\[2\]][2] [\[3\]][3] [\[4\]][4] 强烈建议在读完本笔记后回到原教程完成其中的练习，再运行本文的整合实验做对照。
 
 | 学完后应能回答的问题 | 对应章节 |
 | --- | --- |
@@ -45,13 +45,13 @@ Datawhale 以开源学习模式提供课程、学习路线与实践资源，[1] 
 
 ## 2. 先建立一张训练显存账本
 
-推理通常只需一次前向传播；而训练还要构建并保留 Autograd 为反向传播所需的中间信息。更准确地说，计算图本身未必复制大量张量，但图会持有某些张量的引用；这些供 backward 使用的张量称为 **saved tensors**。[6] 在 eager 训练中，随着前向传播走深，待反向使用的激活逐步积累，峰值通常出现在反向刚开始之前。[7]
+推理通常只需一次前向传播；而训练还要构建并保留 Autograd 为反向传播所需的中间信息。更准确地说，计算图本身未必复制大量张量，但图会持有某些张量的引用；这些供 backward 使用的张量称为 **saved tensors**。[\[6\]][6] 在 eager 训练中，随着前向传播走深，待反向使用的激活逐步积累，峰值通常出现在反向刚开始之前。[\[7\]][7]
 
 因此，下面的分解并不是精确的硬件模型，却是十分实用的调试起点：
 
-\[
+$$
 M_{\text{train}} \approx M_{\text{params}} + M_{\text{grads}} + M_{\text{optimizer}} + M_{\text{activations}} + M_{\text{temporary}}.
-\]
+$$
 
 | 分量 | 直观含义 | 最直接的影响因素 | 本文策略是否直接减少它 |
 | --- | --- | --- | --- |
@@ -83,23 +83,23 @@ M_{\text{train}} \approx M_{\text{params}} + M_{\text{grads}} + M_{\text{optimiz
 
 ### 4.1 它究竟模拟了什么
 
-假设一个逻辑 batch 有 \(N\) 个样本，被拆为 \(K\) 个 micro-batch，第 \(j\) 个 micro-batch 有 \(n_j\) 个样本。若单样本损失为 \(\ell_i\)，完整 batch 的均值损失为：
+假设一个逻辑 batch 有 $N$ 个样本，被拆为 $K$ 个 micro-batch，第 $j$ 个 micro-batch 有 $n_j$ 个样本。若单样本损失为 $\ell_i$，完整 batch 的均值损失为：
 
-\[
+$$
 L = \frac{1}{N}\sum_{i=1}^{N}\ell_i, \qquad N=\sum_{j=1}^{K}n_j.
-\]
+$$
 
-只要参数在这 \(K\) 次前向/反向期间保持不更新，目标梯度就是：
+只要参数在这 $K$ 次前向/反向期间保持不更新，目标梯度就是：
 
-\[
+$$
 \nabla L = \frac{1}{N}\sum_{j=1}^{K}\nabla\left(\sum_{i\in \mathcal{B}_j}\ell_i\right).
-\]
+$$
 
 这解释了“多次 backward、一次 step”的必要性：一旦在中途 `optimizer.step()`，后一个 micro-batch 用的已是新参数，数学上就不再等价于同一个完整 batch。
 
 ### 4.2 严格等价性与损失缩放
 
-在 **每个 micro-batch 大小完全相同**、损失采用 `reduction='mean'` 的常见情形中，下面两种写法等价：对每次均值损失除以 `accum_steps` 再 backward，或累积梯度后在 step 前除以总样本数。[2]
+在 **每个 micro-batch 大小完全相同**、损失采用 `reduction='mean'` 的常见情形中，下面两种写法等价：对每次均值损失除以 `accum_steps` 再 backward，或累积梯度后在 step 前除以总样本数。[\[2\]][2]
 
 不过，最后一个 micro-batch 往往较小。此时机械地执行 `loss_mean / accum_steps` 会让每个 micro-batch 获得同等权重，而非每个**样本**获得同等权重。为了在不丢弃尾部样本时保持严格的 full-batch mean 等价性，下面的实现使用 `reduction='sum'` 累加所有样本梯度，再在一次更新前统一除以 `N`。
 
@@ -170,15 +170,15 @@ def accumulated_step(
     return total_loss_sum / num_samples
 ```
 
-这段代码有四个值得逐行把握的点。第一，`iter_micro_batches` 对字典中的每一个张量使用同一段 `[start:stop]`，这对应真实 SFT batch 中 `input_ids`、`attention_mask`、`labels` 必须同步切分的要求。[2] 第二，`zero_grad` 只能在逻辑更新开始时调用，否则会抹掉前面 micro-batch 已积累的梯度。第三，`backward()` 在每轮 micro-batch 后立即执行，使该 micro-batch 的计算图可以释放，因而峰值激活显存接近 micro-batch 而不是完整 batch。第四，`optimizer.step()` 只出现一次，保持这次更新的参数语义与完整 batch 对齐。
+这段代码有四个值得逐行把握的点。第一，`iter_micro_batches` 对字典中的每一个张量使用同一段 `[start:stop]`，这对应真实 SFT batch 中 `input_ids`、`attention_mask`、`labels` 必须同步切分的要求。[\[2\]][2] 第二，`zero_grad` 只能在逻辑更新开始时调用，否则会抹掉前面 micro-batch 已积累的梯度。第三，`backward()` 在每轮 micro-batch 后立即执行，使该 micro-batch 的计算图可以释放，因而峰值激活显存接近 micro-batch 而不是完整 batch。第四，`optimizer.step()` 只出现一次，保持这次更新的参数语义与完整 batch 对齐。
 
 ### 4.3 有效 batch、调度器与 AMP
 
 单卡时常用近似关系为：
 
-\[
+$$
 \text{effective batch} = \text{micro batch} \times \text{accumulation steps}.
-\]
+$$
 
 在数据并行训练里，还要乘以 `world_size`。更重要的是，学习率调度器、全局 step 日志和模型 checkpoint 通常应以 **optimizer update** 而不是 dataloader iteration 计数。也就是说，累积 8 次才发生一次 `optimizer.step()`，调度器一般也应只走一步。
 
@@ -247,7 +247,7 @@ print(f"max parameter difference: {max_difference:.2e}")
 
 ### 4.5 梯度累积不能解决什么
 
-梯度累积降低的是每次 forward/backward 所需的 activation 峰值，不会让模型权重、梯度或优化器状态凭空变小。[2] 此外，它并不等价于“训练速度一定不变”：更小的 micro-batch 可能降低 GPU 利用率，更多 Python 循环、通信时机和 kernel launch 也可能改变吞吐。因此，梯度累积的正确定位是 **让有效 batch 在较小的单步激活峰值下可实现**，而不是通用的显存压缩术。
+梯度累积降低的是每次 forward/backward 所需的 activation 峰值，不会让模型权重、梯度或优化器状态凭空变小。[\[2\]][2] 此外，它并不等价于“训练速度一定不变”：更小的 micro-batch 可能降低 GPU 利用率，更多 Python 循环、通信时机和 kernel launch 也可能改变吞吐。因此，梯度累积的正确定位是 **让有效 batch 在较小的单步激活峰值下可实现**，而不是通用的显存压缩术。
 
 ---
 
@@ -255,7 +255,7 @@ print(f"max parameter difference: {max_difference:.2e}")
 
 ### 5.1 从“保存”切换为“重算”
 
-激活检查点的基本思想是：将某一段前向包进 checkpoint 区域后，前向阶段不为该区域中的每个操作保存全部中间张量；反向需要这些张量时，再重新运行这一段前向来恢复它们。[5] [7] 因此，它显式地将一部分计算时间换成激活显存空间。
+激活检查点的基本思想是：将某一段前向包进 checkpoint 区域后，前向阶段不为该区域中的每个操作保存全部中间张量；反向需要这些张量时，再重新运行这一段前向来恢复它们。[\[5\]][5] [\[7\]][7] 因此，它显式地将一部分计算时间换成激活显存空间。
 
 ![Checkpoint 与 Offload 的激活生命周期：左侧通过重算恢复，右侧通过双向传输取回](assets/activation_lifecycle_checkpoint_offload.png)
 
@@ -263,7 +263,7 @@ print(f"max parameter difference: {max_difference:.2e}")
 
 ### 5.2 机制与 PyTorch 接口
 
-下面给出一个可运行的残差 MLP stack。`mode="checkpoint"` 时，`checkpoint(block, x, use_reentrant=False)` 将完整 block 作为重算边界。`use_reentrant=False` 是当前 API 中应明确指定的现代路径；更细的语义、RNG 状态与限制应以 PyTorch 官方文档为准。[5]
+下面给出一个可运行的残差 MLP stack。`mode="checkpoint"` 时，`checkpoint(block, x, use_reentrant=False)` 将完整 block 作为重算边界。`use_reentrant=False` 是当前 API 中应明确指定的现代路径；更细的语义、RNG 状态与限制应以 PyTorch 官方文档为准。[\[5\]][5]
 
 ```python
 import copy
@@ -326,7 +326,7 @@ for parameter_a, parameter_b in zip(normal.parameters(), checkpointed.parameters
 
 ### 5.3 粒度是一个可调旋钮，而不是二元选择
 
-checkpoint 的“开或关”太粗糙。将一整个 block 作为单位通常容易维护；只 checkpoint 某些层或某些区域，则可以在峰值显存和重算时间之间精细调节。PyTorch 也提供了更细粒度的 selective checkpointing 思路，用策略决定哪些操作应保存、哪些应倾向重算。[7]
+checkpoint 的“开或关”太粗糙。将一整个 block 作为单位通常容易维护；只 checkpoint 某些层或某些区域，则可以在峰值显存和重算时间之间精细调节。PyTorch 也提供了更细粒度的 selective checkpointing 思路，用策略决定哪些操作应保存、哪些应倾向重算。[\[7\]][7]
 
 | 粒度方案 | 内存倾向 | 时间倾向 | 适合先尝试的场景 |
 | --- | --- | --- | --- |
@@ -343,11 +343,11 @@ checkpoint 的“开或关”太粗糙。将一整个 block 作为单位通常�
 
 ### 6.1 从“重算”切换为“搬运”
 
-checkpoint 的答案是“我不留，之后再算”；offload 的答案是“我仍然留，但不留在 GPU”。保存到 CPU 的激活需要在 backward 使用时回到计算设备，因此真正的工程约束从 GPU 容量转向了 **CPU 内存容量、主机—设备互连带宽、传输调度和同步开销**。原教程用一个简化计划器把“节省字节数”和“搬运时间”放到同一张账上，这个抽象非常适合建立直觉。[4]
+checkpoint 的答案是“我不留，之后再算”；offload 的答案是“我仍然留，但不留在 GPU”。保存到 CPU 的激活需要在 backward 使用时回到计算设备，因此真正的工程约束从 GPU 容量转向了 **CPU 内存容量、主机—设备互连带宽、传输调度和同步开销**。原教程用一个简化计划器把“节省字节数”和“搬运时间”放到同一张账上，这个抽象非常适合建立直觉。[\[4\]][4]
 
 ### 6.2 真正被搬运的对象
 
-一个重要澄清：使用 `torch.autograd.graph.save_on_cpu` 时，目标是 Autograd 为 backward 保存的张量，并不等价于把模型参数、当前输出或整个 `nn.Module` 全部搬到 CPU。PyTorch 的 saved tensor hooks 允许开发者控制张量被保存时的 pack 与需要时的 unpack；官方教程也展示了将 saved tensors 保存到 CPU，并在需要时移回原设备的模式。[6]
+一个重要澄清：使用 `torch.autograd.graph.save_on_cpu` 时，目标是 Autograd 为 backward 保存的张量，并不等价于把模型参数、当前输出或整个 `nn.Module` 全部搬到 CPU。PyTorch 的 saved tensor hooks 允许开发者控制张量被保存时的 pack 与需要时的 unpack；官方教程也展示了将 saved tensors 保存到 CPU，并在需要时移回原设备的模式。[\[6\]][6]
 
 下面的包装器把某个模块的 saved tensors 放入 CPU。若在 CUDA 环境中可用，`pin_memory=True` 使主机端张量可以使用页锁定内存；它可能有助于传输，但并不保证收益，仍须测量。
 
@@ -389,11 +389,11 @@ loss.backward()
 
 ### 6.3 一个可审计的最小计划器
 
-在做真实 Hook 之前，先用“激活块”建立决策草图很有价值。设需离开 GPU 的激活总量为 \(A_{\text{offload}}\)，可用单向带宽为 \(bw\) GiB/s，则理想单向传输时间近似为：
+在做真实 Hook 之前，先用“激活块”建立决策草图很有价值。设需离开 GPU 的激活总量为 $A_{\text{offload}}$，可用单向带宽为 $bw$ GiB/s，则理想单向传输时间近似为：
 
-\[
+$$
 t_{\text{one-way}}(\mathrm{ms}) \approx 1000\cdot\frac{A_{\text{offload}}}{bw\cdot 2^{30}}.
-\]
+$$
 
 一次训练 step 往往至少涉及一次 GPU→CPU 与一次 CPU→GPU，因此仅把该估计乘以二才接近**传输量级**，但仍没有包含同步、争用和运行时调度。下面的计划器按 `keep_score` 从低到高卸载，目的是提供可解释的启发式，而不是假装替代真实性能分析。
 
@@ -535,7 +535,7 @@ python code/memory_optimization_lab.py \
 
 ### 8.3 如何读出自己的散点图
 
-如果图上的 checkpoint 点在 baseline 左侧，说明它降低了峰值 GPU 显存；若同时向下或接近 baseline，表示时间代价较小。若 offload 点虽明显向左却大幅上移，说明省下的显存是以传输时间为代价换来的。最终选点不是追求“最左”或“最下”，而是在你的显存上限与吞吐目标之间找到满足约束的 Pareto 折中。PyTorch 的官方技术文章也用速度—内存平面来解释 checkpoint 及其选择性变体的取舍。[7]
+如果图上的 checkpoint 点在 baseline 左侧，说明它降低了峰值 GPU 显存；若同时向下或接近 baseline，表示时间代价较小。若 offload 点虽明显向左却大幅上移，说明省下的显存是以传输时间为代价换来的。最终选点不是追求“最左”或“最下”，而是在你的显存上限与吞吐目标之间找到满足约束的 Pareto 折中。PyTorch 的官方技术文章也用速度—内存平面来解释 checkpoint 及其选择性变体的取舍。[\[7\]][7]
 
 ---
 
@@ -565,19 +565,21 @@ python code/memory_optimization_lab.py \
 
 本文以 Datawhale 三份指定 Notebook 为学习入口，并以 PyTorch 官方文档校验接口与机制性描述。除参考链接外，文中的结构、推导、代码组织、图解与工程建议均为重新整理的原创学习笔记。
 
-[1] [Datawhale 社区主页：开源学习、课程与学习路线](https://www.datawhale.cn/)
+1. [Datawhale 社区主页：开源学习、课程与学习路线][1]
+2. [Datawhale：12. Gradient Accumulation][2]
+3. [Datawhale：19. Activation Checkpointing and Activation Offload][3]
+4. [Datawhale：42. Activation Offload][4]
+5. [PyTorch Documentation：torch.utils.checkpoint][5]
+6. [PyTorch Tutorial：Hooks for Autograd Saved Tensors][6]
+7. [PyTorch Blog：Current and New Activation Checkpointing Techniques in PyTorch][7]
 
-[2] [Datawhale：12. Gradient Accumulation](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/12_Gradient_Accumulation.ipynb)
-
-[3] [Datawhale：19. Activation Checkpointing and Activation Offload](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/19_Activation_Checkpointing_and_Activation_Offload.ipynb)
-
-[4] [Datawhale：42. Activation Offload](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/42_Activation_Offload.ipynb)
-
-[5] [PyTorch Documentation：torch.utils.checkpoint](https://docs.pytorch.org/docs/2.13/checkpoint.html)
-
-[6] [PyTorch Tutorial：Hooks for Autograd Saved Tensors](https://docs.pytorch.org/tutorials/intermediate/autograd_saved_tensors_hooks_tutorial.html)
-
-[7] [PyTorch Blog：Current and New Activation Checkpointing Techniques in PyTorch](https://pytorch.org/blog/activation-checkpointing-techniques/)
+[1]: https://www.datawhale.cn/ "Datawhale 社区主页：开源学习、课程与学习路线"
+[2]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/12_Gradient_Accumulation.ipynb "Datawhale：12. Gradient Accumulation"
+[3]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/19_Activation_Checkpointing_and_Activation_Offload.ipynb "Datawhale：19. Activation Checkpointing and Activation Offload"
+[4]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/42_Activation_Offload.ipynb "Datawhale：42. Activation Offload"
+[5]: https://docs.pytorch.org/docs/2.13/checkpoint.html "PyTorch Documentation：torch.utils.checkpoint"
+[6]: https://docs.pytorch.org/tutorials/intermediate/autograd_saved_tensors_hooks_tutorial.html "PyTorch Tutorial：Hooks for Autograd Saved Tensors"
+[7]: https://pytorch.org/blog/activation-checkpointing-techniques/ "PyTorch Blog：Current and New Activation Checkpointing Techniques in PyTorch"
 
 ---
 
