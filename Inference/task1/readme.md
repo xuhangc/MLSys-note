@@ -4,8 +4,8 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 主要学习来源 | [DataWhale：GPU 物理架构与内存层级][2]、[DataWhale：KV Cache 与显存增长][3] |
-| 社区 | [DataWhale 社区官网][1]，一个以开源学习方式连接 AI 学习者、知识与实践场景的社区。[1] |
+| 主要学习来源 | [DataWhale：GPU 物理架构与内存层级](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb)、[DataWhale：KV Cache 与显存增长](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb) |
+| 社区 | [DataWhale 社区官网](https://datawhale.cn/)，一个以开源学习方式连接 AI 学习者、知识与实践场景的社区。[\[1\]](https://datawhale.cn/) |
 | 本文特点 | 在指定教程知识范围上**重新组织、独立表述并扩展推导**；示例代码为本笔记独立编写；全部概念图由 GPT-image-2 生成。 |
 | 面向读者 | 具有 Transformer 基础、希望理解 LLM 训练或推理性能瓶颈的学习者。 |
 | 先修知识 | 矩阵乘法、Self-Attention、Python 基础。 |
@@ -14,7 +14,7 @@
 
 ## 0. 先抓住全局：大模型显存里其实有“两本账”
 
-很多初学者会把 Attention 的显存问题与 KV Cache 的显存问题混成一句“上下文长就会 OOM”。这句话并不够精确。**在 Prefill（处理整个提示词）阶段**，若显式物化注意力分数矩阵，`S × S` 的二维结构会使中间张量呈二次增长；FlashAttention 的主要贡献正是重写这部分的 **IO 路径**。**在 Decode（每步生成一个 token）阶段**，历史 token 的 K/V 会被保留下来避免重复投影，于是缓存对上下文长度 `S` 呈线性增长；长会话和高并发最终常被这部分容量卡住。[2] [3]
+很多初学者会把 Attention 的显存问题与 KV Cache 的显存问题混成一句“上下文长就会 OOM”。这句话并不够精确。**在 Prefill（处理整个提示词）阶段**，若显式物化注意力分数矩阵，`S × S` 的二维结构会使中间张量呈二次增长；FlashAttention 的主要贡献正是重写这部分的 **IO 路径**。**在 Decode（每步生成一个 token）阶段**，历史 token 的 K/V 会被保留下来避免重复投影，于是缓存对上下文长度 `S` 呈线性增长；长会话和高并发最终常被这部分容量卡住。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
 
 | 账本 | 典型阶段 | 关键张量形状 | 随序列长度的主要增长 | 代表性优化 |
 | --- | --- | --- | --- | --- |
@@ -27,7 +27,7 @@
 
 ## 1. GPU 并非一个黑盒：计算和数据搬运同时发生
 
-GPU 适合深度学习，并不是因为它会“神奇地计算”，而是因为它把大量计算单元组织成并行的 **SM（Streaming Multiprocessor，流式多处理器）**，再配合多级存储与专门的矩阵运算单元。以 Hopper 为例，官方资料明确给出了 SM、Tensor Core、共享内存/L1、L2、HBM3 和高速互连的协同设计；其中 TMA 用于大块数据在全局内存与共享内存间的高效异步搬运。[4]
+GPU 适合深度学习，并不是因为它会“神奇地计算”，而是因为它把大量计算单元组织成并行的 **SM（Streaming Multiprocessor，流式多处理器）**，再配合多级存储与专门的矩阵运算单元。以 Hopper 为例，官方资料明确给出了 SM、Tensor Core、共享内存/L1、L2、HBM3 和高速互连的协同设计；其中 TMA 用于大块数据在全局内存与共享内存间的高效异步搬运。[\[4\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
 
 ![图 1：GPU 计算芯片和存储层级的概念剖面图。金色区域表示计算阵列，青色区域表示片上数据通路，蓝色堆叠表示 HBM。](assets/gpu_memory_hierarchy.png)
 
@@ -46,7 +46,7 @@ GPU 适合深度学习，并不是因为它会“神奇地计算”，而是因�
 
 ### 1.2 CUDA Core 与 Tensor Core：差异不只是“更快”
 
-普通标量 FMA 可以写成 `d = a × b + c`。而 Tensor Core 的思维单位是小型矩阵块：`D = A × B + C`。它不是简单地把同一条标量指令提频，而是将大量乘加按照矩阵 tile 组织，并支持适合 AI 的混合精度路径。Tensor Cores 最初在 V100 引入，后续 GPU 架构持续扩展数据类型与吞吐；Hopper 的第四代 Tensor Core 支持 FP8、FP16、BF16、TF32 等 MMA 类型，并与 Transformer Engine 协同。[4] [5]
+普通标量 FMA 可以写成 `d = a × b + c`。而 Tensor Core 的思维单位是小型矩阵块：`D = A × B + C`。它不是简单地把同一条标量指令提频，而是将大量乘加按照矩阵 tile 组织，并支持适合 AI 的混合精度路径。Tensor Cores 最初在 V100 引入，后续 GPU 架构持续扩展数据类型与吞吐；Hopper 的第四代 Tensor Core 支持 FP8、FP16、BF16、TF32 等 MMA 类型，并与 Transformer Engine 协同。[\[4\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/) [\[5\]](https://www.nvidia.com/en-us/data-center/tensor-cores/)
 
 ![图 2：左侧是多条独立的标量流水线，右侧是以 tile 为颗粒度的矩阵乘加数据流。](assets/tensorcore_dataflow.png)
 
@@ -58,7 +58,7 @@ GPU 适合深度学习，并不是因为它会“神奇地计算”，而是因�
 
 ## 2. 显存层级：速度、容量与可复用性之间的交换
 
-GPU 存储结构的核心规律是：**越靠近执行单元，越快、越小，也越难被随意共享；越远离执行单元，越大、越通用，但搬运代价越高。** 下面的表格刻意使用“角色”而不是硬背某个固定数字，因为不同架构和板卡形态的容量、带宽和延迟会变化。[2] [4]
+GPU 存储结构的核心规律是：**越靠近执行单元，越快、越小，也越难被随意共享；越远离执行单元，越大、越通用，但搬运代价越高。** 下面的表格刻意使用“角色”而不是硬背某个固定数字，因为不同架构和板卡形态的容量、带宽和延迟会变化。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[4\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
 
 | 层级 | 典型可见性 | 容量直觉 | 最合适的数据 | 常见坑 |
 | --- | --- | --- | --- | --- |
@@ -81,7 +81,7 @@ $$
 P_{attainable} \le \min(P_{peak},\ I \times BW)
 $$
 
-当 `I × BW < P_peak` 时，算子更接近 **memory-bound（访存受限）**：即使增加计算单元，也常在等待数据。当 `I × BW ≥ P_peak` 时，才有机会转向 compute-bound（算力受限）。这正是为什么高算力 GPU 往往更强调片上复用和数据搬运优化——计算增长得比外部内存带宽更快时，“喂饱计算单元”会更难。[2] [4]
+当 `I × BW < P_peak` 时，算子更接近 **memory-bound（访存受限）**：即使增加计算单元，也常在等待数据。当 `I × BW ≥ P_peak` 时，才有机会转向 compute-bound（算力受限）。这正是为什么高算力 GPU 往往更强调片上复用和数据搬运优化——计算增长得比外部内存带宽更快时，“喂饱计算单元”会更难。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[4\]](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
 
 ```python
 # 简化 Roofline：只用于形成量级直觉，不是 benchmark 替代品。
@@ -151,7 +151,7 @@ for s in (2_048, 8_192, 32_768):
 
 ### 3.1 FlashAttention 的核心：不让巨型中间结果频繁经过 HBM
 
-FlashAttention 的关键不是“把 Attention 的数学计算从 O(S²) 变为 O(S)”。注意力对所有历史 token 的关联计算仍然存在。它改变的是 **IO 算法**：把 `Q/K/V` 切成能放进 SRAM 的 tile，在片上完成局部 score、在线 softmax 归约和与 `V` 的累积，避免将完整 `S × S` 中间矩阵反复写到 HBM 再读回来。[2] [6]
+FlashAttention 的关键不是“把 Attention 的数学计算从 O(S²) 变为 O(S)”。注意力对所有历史 token 的关联计算仍然存在。它改变的是 **IO 算法**：把 `Q/K/V` 切成能放进 SRAM 的 tile，在片上完成局部 score、在线 softmax 归约和与 `V` 的累积，避免将完整 `S × S` 中间矩阵反复写到 HBM 再读回来。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb) [\[6\]](https://arxiv.org/abs/2205.14135)
 
 ![图 3：Q/K/V 的小块从 HBM 进入片上 SRAM，在其中完成局部交互和在线归约；淡出的巨大网格表示避免物化的全局注意力中间矩阵。](assets/flashattention_tiling.png)
 
@@ -253,7 +253,7 @@ $$
 
 ## 5. MHA、GQA、MQA：决定缓存大小的是 `H_kv`，不是 `H_q`
 
-在标准 MHA 中，通常每个 Query head 都拥有对应的 K/V head，因而 `H_kv = H_q`。MQA 让多个 Query head 共享同一组 K/V；GQA 则让多个 Query head 按组共享 K/V，处于二者之间。这些结构的一个直接系统后果是：**KV Cache 的头维度从 `H_q` 改为 `H_kv`。** 因此，缓存按 `H_kv` 成比例缩小。[3]
+在标准 MHA 中，通常每个 Query head 都拥有对应的 K/V head，因而 `H_kv = H_q`。MQA 让多个 Query head 共享同一组 K/V；GQA 则让多个 Query head 按组共享 K/V，处于二者之间。这些结构的一个直接系统后果是：**KV Cache 的头维度从 `H_q` 改为 `H_kv`。** 因此，缓存按 `H_kv` 成比例缩小。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
 
 | 注意力结构 | 例：`H_q=32` | `H_kv` | 相对 KV Cache | 主要取舍 |
 | --- | ---: | ---: | ---: | --- |
@@ -292,7 +292,7 @@ for name, h_kv in [("MHA", 32), ("GQA", 8), ("MQA", 1)]:
 
 ### 6.1 PagedAttention：像操作系统分页一样组织缓存
 
-PagedAttention 的核心启发是把每条请求的 KV Cache 切成固定大小的块（页面），使用逻辑映射将 token 位置连接到不一定连续的物理页。这样，不必为一条长度未知的请求预先申请一大段连续显存，从而缓解服务场景中动态长度请求造成的外部碎片与分配困难。[3] [7]
+PagedAttention 的核心启发是把每条请求的 KV Cache 切成固定大小的块（页面），使用逻辑映射将 token 位置连接到不一定连续的物理页。这样，不必为一条长度未知的请求预先申请一大段连续显存，从而缓解服务场景中动态长度请求造成的外部碎片与分配困难。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb) [\[7\]](https://arxiv.org/abs/2309.06180)
 
 它仍然有尾页的**内部浪费**：例如页长为 128，长度 8,321 的序列需要 `ceil(8321/128)=66` 页，最后一页空出 `66×128-8321=127` 个 token 槽位。分页并非“零浪费”，而是以可控的小粒度尾部浪费换取更灵活的分配、回收和调度。
 
@@ -387,19 +387,13 @@ python3 gpu_kv_toolbox.py
 
 ## 10. 参考资料
 
-[1] [DataWhale 社区官网](https://datawhale.cn/)
-
-[2] [DataWhale：03 GPU Architecture and Memory｜GPU 物理架构与内存层级](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb)
-
-[3] [DataWhale：11 KV Cache and Memory Growth｜KV Cache 与显存增长](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
-
-[4] [NVIDIA Technical Blog：NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
-
-[5] [NVIDIA：Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/)
-
-[6] [Dao et al.：FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)
-
-[7] [Kwon et al.：Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
+1. [DataWhale 社区官网](https://datawhale.cn/)
+2. [DataWhale：03 GPU Architecture and Memory｜GPU 物理架构与内存层级](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/03_GPU_Architecture_and_Memory.ipynb)
+3. [DataWhale：11 KV Cache and Memory Growth｜KV Cache 与显存增长](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
+4. [NVIDIA Technical Blog：NVIDIA Hopper Architecture In-Depth](https://developer.nvidia.com/blog/nvidia-hopper-architecture-in-depth/)
+5. [NVIDIA：Tensor Cores](https://www.nvidia.com/en-us/data-center/tensor-cores/)
+6. [Dao et al.：FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)
+7. [Kwon et al.：Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
 
 ---
 
