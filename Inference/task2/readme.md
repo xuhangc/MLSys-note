@@ -68,7 +68,7 @@ DataWhale 是一个采用开源学习模式、连接 AI 学习者与学习资源
 
 $$
 S = \frac{QK^\top}{\sqrt{d_k}},\qquad
-P = \operatorname{softmax}(S),\qquad
+P = \text{softmax}(S),\qquad
 O = PV.
 $$
 
@@ -152,7 +152,7 @@ $$
 对一行 score $x$，直接算 $\exp(x)$ 容易溢出。因此选取该行最大值 $m=\max_jx_j$：
 
 $$
-\operatorname{softmax}(x)_j=
+\text{softmax}(x)_j=
 \frac{\exp(x_j-m)}{\sum_t\exp(x_t-m)}.
 $$
 

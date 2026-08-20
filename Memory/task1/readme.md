@@ -53,7 +53,7 @@ H100 SXM 的官方规格列出 3.35 TB/s 的 GPU 内存带宽和 900 GB/s 的 NV
 一个很有用的第一近似是**算术强度**：
 
 $$
-\operatorname{Arithmetic\ Intensity}=\frac{\text{FLOPs}}{\text{Bytes moved to/from main memory}}.
+\text{Arithmetic Intensity}=\frac{\text{FLOPs}}{\text{Bytes moved to/from main memory}}.
 $$
 
 当分子很小或分母很大时，算子更可能是 **memory-bound**：算力等数据；当这个比值足够高时，算子才更可能接近 **compute-bound**：数据已经到位，计算单元成为限制。这个概念不是对每个 kernel 的精确诊断，却能直接解释两个实践经验：**融合算子**可以减少中间张量的 HBM 往返；**分块（tiling）**可以提升一次加载后的复用次数。
@@ -77,7 +77,7 @@ $$
 $$
 Q,K,V\in\mathbb{R}^{N\times d},\qquad
 S=\frac{QK^\top}{\sqrt d}\in\mathbb{R}^{N\times N},\qquad
-O=\operatorname{softmax}(S)V.
+O=\text{softmax}(S)V.
 $$
 
 计算 `Q @ K.T` 的 FLOPs 随 $N^2d$ 增长，这是 attention 的计算成本；但朴素实现若显式保存 `S`，就会同时制造一个 $N\times N$ 的大中间量。若还将 Softmax 概率 `P` 单独物化，就又增加一个同形状张量。
@@ -117,7 +117,7 @@ FlashAttention 原论文将此视作 **IO-aware exact attention**：优化目标
 这是整件事最容易被误解、也最有价值的数学部分。标准稳定 Softmax 对一行分数向量 $x$ 写作
 
 $$
-\operatorname{softmax}(x)_j=
+\text{softmax}(x)_j=
 \frac{e^{x_j-m}}{\sum_t e^{x_t-m}},\qquad m=\max_t x_t.
 $$
 
