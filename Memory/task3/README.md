@@ -1,6 +1,6 @@
 # 从“训练很慢/显存不够”到可审计决策：PyTorch 训练性能、激活检查点与卸载学习笔记
 
-> **面向场景**：你已经能写出 PyTorch 训练循环，但需要回答更工程化的问题：训练 step 到底慢在哪里？某个显存优化是否真的有效？显存下降以后，速度和质量是否仍在可接受范围内？
+**面向场景**：你已经能写出 PyTorch 训练循环，但需要回答更工程化的问题：训练 step 到底慢在哪里？某个显存优化是否真的有效？显存下降以后，速度和质量是否仍在可接受范围内？
 >
 > 本文以 Datawhale 的三份项目型教程为学习入口，**重新组织、重新实现并扩展**为“**测量 → 对比 → 决策**”的实践闭环。它不复述原教程；所有示例代码均为本文重新编写，完整可运行源文件位于 [`code/`](./code/) 目录。
 
@@ -8,11 +8,11 @@
 
 | 学习入口 | 本文重新提炼后的角色 | 原教程 |
 |---|---|---|
-| 训练性能分析 | 建立可复现的**测量口径**，而不是只看一次总耗时 | [73. Training Performance Analysis][1] |
-| 激活检查点 / 卸载基准 | 在单变量控制下取得各个策略的**证据** | [76. Activation Checkpoint Offload Benchmark][2] |
-| 显存预算压缩项目 | 将证据代入显存、吞吐、质量约束，给出**工程决策** | [75. Memory Budget Compression Project][3] |
+| 训练性能分析 | 建立可复现的**测量口径**，而不是只看一次总耗时 | [73. Training Performance Analysis](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb) |
+| 激活检查点 / 卸载基准 | 在单变量控制下取得各个策略的**证据** | [76. Activation Checkpoint Offload Benchmark](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb) |
+| 显存预算压缩项目 | 将证据代入显存、吞吐、质量约束，给出**工程决策** | [75. Memory Budget Compression Project](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/75_Memory_Budget_Compression_Project.ipynb) |
 
-本文首先向 [Datawhale 社区][8] 与上述教程的贡献者致谢。文中的机制性描述还与 PyTorch 官方文档交叉核验，具体出处见文末参考文献。
+本文首先向 [Datawhale 社区](https://datawhale.cn/) 与上述教程的贡献者致谢。文中的机制性描述还与 PyTorch 官方文档交叉核验，具体出处见文末参考文献。
 
 ---
 
@@ -39,17 +39,17 @@
 
 可以把训练 step 的墙钟时间粗略拆成：
 
-\[
+$$
 T_{\text{step}} \approx T_{\text{data}} + T_{\text{forward}} + T_{\text{backward}} + T_{\text{optimizer}} + T_{\text{sync}}
-\]
+$$
 
 其中，`data` 是数据准备与主机到设备的搬运，`forward/backward` 是模型计算，`optimizer` 是参数更新，`sync` 则包括显式同步、隐式同步、通信或等待。这个式子不是精确性能模型，而是一张**排障地图**：测出慢之后，才有资格讨论该优化数据、算子、梯度还是显存。
 
 相应地，单卡训练的峰值显存可使用下面的账本理解：
 
-\[
+$$
 M_{\text{peak}} \approx M_{\text{parameters}} + M_{\text{gradients}} + M_{\text{optimizer}} + M_{\text{activations}} + M_{\text{temporary}} + M_{\text{allocator slack}}
-\]
+$$
 
 对于大模型微调，**激活**通常会随 batch size、序列长度、隐藏维度和层数快速增长；注意力模块还可能出现与序列长度平方相关的中间量。权重精度、优化器状态和缓存分配器也会影响峰值。因此，显存优化的前提不是猜测“激活一定最大”，而是用测量验证：在当前工作负载下，究竟是谁把峰值推高。
 
@@ -65,14 +65,14 @@ M_{\text{peak}} \approx M_{\text{parameters}} + M_{\text{gradients}} + M_{\text{
 
 | 指标 | 计算方式 | 回答的问题 | 常见误读 |
 |---|---|---|---|
-| 平均 step time | \(\frac{T_{end}-T_{start}}{N}\) | 一步训练的端到端延迟是否改善？ | CUDA 异步时不做同步，计到的只是 CPU 发射 kernel 的时间 |
-| 吞吐 | \(\frac{\text{batch size} \times N}{T_{elapsed}}\) | 单位时间实际处理了多少样本？ | 只看 step time，忽略 batch 或累积方式已改变 |
+| 平均 step time | $`\frac{T_{end}-T_{start}}{N}`$ | 一步训练的端到端延迟是否改善？ | CUDA 异步时不做同步，计到的只是 CPU 发射 kernel 的时间 |
+| 吞吐 | $`\frac{\text{batch size} \times N}{T_{elapsed}}`$ | 单位时间实际处理了多少样本？ | 只看 step time，忽略 batch 或累积方式已改变 |
 | peak allocated | `max_memory_allocated()` | 张量实际占用的峰值是否下降？ | 与 `reserved` 混为一谈 |
 | eval loss / 质量指标 | 固定验证输入或验证集计算 | 性能收益是否以质量为代价？ | 只比较训练 loss，忽略泛化和随机性 |
 
-PyTorch 的 `max_memory_allocated()` 返回指定设备上**张量占用**的历史峰值；在每个测量窗口前调用 `reset_peak_memory_stats()` 才能把窗口对齐。[6] PyTorch 还使用缓存分配器：`memory_reserved()` / `max_memory_reserved()` 表示分配器管理的总量，因此它可能显著高于张量实际占用，并且 `nvidia-smi` 的“已用显存”也不等同于 `allocated`。[7]
+PyTorch 的 `max_memory_allocated()` 返回指定设备上**张量占用**的历史峰值；在每个测量窗口前调用 `reset_peak_memory_stats()` 才能把窗口对齐。[\[6\]](https://pytorch.org/docs/stable/generated/torch.cuda.max_memory_allocated.html) PyTorch 还使用缓存分配器：`memory_reserved()` / `max_memory_reserved()` 表示分配器管理的总量，因此它可能显著高于张量实际占用，并且 `nvidia-smi` 的“已用显存”也不等同于 `allocated`。[\[7\]](https://pytorch.org/docs/stable/notes/cuda.html#memory-management)
 
-> **工程结论**：若目标是“这个模型/策略需要多少 GPU 容量”，优先报告 `peak allocated`，同时附上 `peak reserved` 来诊断缓存与碎片；不要把后者直接宣称为模型本体节省的显存。
+**工程结论**：若目标是“这个模型/策略需要多少 GPU 容量”，优先报告 `peak allocated`，同时附上 `peak reserved` 来诊断缓存与碎片；不要把后者直接宣称为模型本体节省的显存。
 
 ### 2.2 为什么要记录峰值而不是最后一刻的显存
 
@@ -86,13 +86,13 @@ PyTorch 的 `max_memory_allocated()` 返回指定设备上**张量占用**的历
 | `reserved` | PyTorch 缓存分配器保留、可复用的内存 | 是否存在明显缓存/碎片现象？ |
 | `empty_cache()` | 释放**未使用**的缓存块给其他应用 | 进程间腾出缓存；**不能**释放仍被活跃张量占用的内存 |
 
-官方文档明确说明，缓存分配器用于避免频繁分配时的设备同步；`empty_cache()` 只能释放未使用缓存，不能增加当前 PyTorch 工作负载实际可用的张量容量。[7] 所以，把 `empty_cache()` 当作“解决模型 OOM 的通用按钮”通常是误区。
+官方文档明确说明，缓存分配器用于避免频繁分配时的设备同步；`empty_cache()` 只能释放未使用缓存，不能增加当前 PyTorch 工作负载实际可用的张量容量。[\[7\]](https://pytorch.org/docs/stable/notes/cuda.html#memory-management) 所以，把 `empty_cache()` 当作“解决模型 OOM 的通用按钮”通常是误区。
 
 ---
 
 ## 3. 训练性能分析：可信测量的六条纪律
 
-Datawhale 的第 73 节强调训练分析应围绕 baseline 与证据收口，[1] 本文将其落成以下六条纪律。
+Datawhale 的第 73 节强调训练分析应围绕 baseline 与证据收口，[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb) 本文将其落成以下六条纪律。
 
 | 纪律 | 必须固定/执行的内容 | 不这样做的后果 |
 |---|---|---|
@@ -103,12 +103,11 @@ Datawhale 的第 73 节强调训练分析应围绕 baseline 与证据收口，[1
 | 5. 单变量实验 | 一轮只变 checkpoint、offload、AMP 或 batch 中的一个 | 结果不可解释也不可复现 |
 | 6. 保存工件 | JSON、图表、环境、配置、决定理由 | 实验只能口头复述，无法复盘 |
 
-CUDA 操作通常是异步排队的；PyTorch 官方文档建议在可靠墙钟计时中显式 `torch.cuda.synchronize()`，或使用 `torch.cuda.Event`。[5] 因此，下面的计时器把同步视为测量协议的一部分，而不是“可选优化”。
+CUDA 操作通常是异步排队的；PyTorch 官方文档建议在可靠墙钟计时中显式 `torch.cuda.synchronize()`，或使用 `torch.cuda.Event`。[\[5\]](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution) 因此，下面的计时器把同步视为测量协议的一部分，而不是“可选优化”。
 
 ```python
 import time
 import torch
-
 
 def measure_steps(train_step, *, device, warmup=3, iters=20):
     """返回同一测量窗口内的平均 step time 与 GPU 峰值。"""
@@ -163,17 +162,16 @@ def measure_steps(train_step, *, device, warmup=3, iters=20):
 
 ### 4.1 激活检查点：用计算换显存
 
-默认训练会保留 forward 产生的许多中间激活，以便 backward 计算梯度。激活检查点不保存某个区域内的大部分中间量，而是在 backward 需要时**重新运行该区域 forward**。因此它把内存压力交换为额外计算。[4]
+默认训练会保留 forward 产生的许多中间激活，以便 backward 计算梯度。激活检查点不保存某个区域内的大部分中间量，而是在 backward 需要时**重新运行该区域 forward**。因此它把内存压力交换为额外计算。[\[4\]](https://docs.pytorch.org/docs/2.13/checkpoint.html)
 
-\[
+$$
 \text{checkpointing}:\qquad \downarrow M_{\text{activation}} \quad \text{in exchange for} \quad \uparrow T_{\text{backward}}
-\]
+$$
 
-PyTorch 的 `torch.utils.checkpoint.checkpoint` 正是这一语义：传入函数的输入会保留，而未保存的中间结果在 backward 期间按需重算。官方还推荐显式选择 `use_reentrant=False`；它支持更完整的 autograd 用法，并可在已重算所需张量后提前停止重算。[4]
+PyTorch 的 `torch.utils.checkpoint.checkpoint` 正是这一语义：传入函数的输入会保留，而未保存的中间结果在 backward 期间按需重算。官方还推荐显式选择 `use_reentrant=False`；它支持更完整的 autograd 用法，并可在已重算所需张量后提前停止重算。[\[4\]](https://docs.pytorch.org/docs/2.13/checkpoint.html)
 
 ```python
 from torch.utils.checkpoint import checkpoint
-
 
 def forward_blocks(blocks, hidden, enable_checkpoint):
     for block in blocks:
@@ -189,16 +187,15 @@ def forward_blocks(blocks, hidden, enable_checkpoint):
 
 ### 4.2 CPU 激活卸载：用数据搬运换显存
 
-卸载不是“删除激活”。它是在 forward 阶段把 backward 将需要的保存张量放到主机侧；backward 发生时再搬回设备。`torch.autograd.graph.save_on_cpu` 提供了一个保存张量到 CPU 的上下文工具，适合教学或局部原型验证。[9]
+卸载不是“删除激活”。它是在 forward 阶段把 backward 将需要的保存张量放到主机侧；backward 发生时再搬回设备。`torch.autograd.graph.save_on_cpu` 提供了一个保存张量到 CPU 的上下文工具，适合教学或局部原型验证。[\[9\]](https://docs.pytorch.org/docs/2.13/autograd.html#torch.autograd.graph.save_on_cpu)
 
-\[
+$$
 \text{CPU offload}:\qquad \downarrow M_{\text{GPU activation}} \quad \text{in exchange for} \quad \uparrow T_{\text{transfer}} + \uparrow T_{\text{sync risk}}
-\]
+$$
 
 ```python
 from contextlib import nullcontext
 import torch
-
 
 def saved_tensor_context(strategy, device):
     if strategy in {"offload", "hybrid"} and device.type == "cuda":
@@ -227,7 +224,7 @@ def saved_tensor_context(strategy, device):
 
 ## 5. 一个原创、可复现的策略基准
 
-本节的完整代码在 [`code/benchmark_memory_strategies.py`](./code/benchmark_memory_strategies.py)。它提供了一个 TinyTransformer 语言模型，并在完全相同的初始权重、输入 batch、优化器和测量轮数下比较 `baseline`、`checkpoint`、`offload`、`hybrid`。设计目标并非复刻某一张显卡上的绝对数字，而是把 Datawhale 教程的实验原则改写成可迁移的基准骨架。[2]
+本节的完整代码在 [`code/benchmark_memory_strategies.py`](./code/benchmark_memory_strategies.py)。它提供了一个 TinyTransformer 语言模型，并在完全相同的初始权重、输入 batch、优化器和测量轮数下比较 `baseline`、`checkpoint`、`offload`、`hybrid`。设计目标并非复刻某一张显卡上的绝对数字，而是把 Datawhale 教程的实验原则改写成可迁移的基准骨架。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb)
 
 ### 5.1 运行方式
 
@@ -331,15 +328,15 @@ def safe_run(strategy, cfg, device):
 
 ![显存预算决策的概念图](./assets/memory-budget-decision.png)
 
-第 75 节的关键价值在于：它要求先写清**预算边界**，再选择方案。[3] 这里采用三个硬约束和两个“值得保留”阈值。
+第 75 节的关键价值在于：它要求先写清**预算边界**，再选择方案。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/75_Memory_Budget_Compression_Project.ipynb) 这里采用三个硬约束和两个“值得保留”阈值。
 
-\[
+$$
 \begin{aligned}
 \text{memory feasible} &\iff M_{peak} \le M_{cap}\\
 \text{speed feasible} &\iff \text{throughput} \ge R_{min}\\
 \text{quality feasible} &\iff \mathcal{L}_{eval} \le \mathcal{L}_{base}(1+\epsilon)
 \end{aligned}
-\]
+$$
 
 只有三者同时成立，候选策略才进入“可行集合”。然后在可行集合内，根据峰值显存、吞吐、验证损失排序；再额外判断节省量和吞吐保留率是否达到团队定义的“有意义”阈值。
 
@@ -383,13 +380,13 @@ def decide_memory_plan(candidates, budget):
 
 ## 7. 如何解读原教程给出的单机样例
 
-下面两张数值图均由 [`code/plot_datawhale_example_results.py`](./code/plot_datawhale_example_results.py) 根据原教程写出的 RTX 5070 Ti Laptop GPU 样例数据重新绘制。[1] [2] 它们是**特定设备、特定模型、特定 PyTorch/CUDA 版本、特定 batch 与序列长度**下的一次教学记录，不是跨设备的普适基准。
+下面两张数值图均由 [`code/plot_datawhale_example_results.py`](./code/plot_datawhale_example_results.py) 根据原教程写出的 RTX 5070 Ti Laptop GPU 样例数据重新绘制。[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb) [\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb) 它们是**特定设备、特定模型、特定 PyTorch/CUDA 版本、特定 batch 与序列长度**下的一次教学记录，不是跨设备的普适基准。
 
 ### 7.1 策略 benchmark：checkpoint 值得留在候选集，offload 需要非常审慎
 
 ![由原教程样例数据重绘的策略对比图](./figures/datawhale_strategy_example.png)
 
-样例的压力工作负载使用 Qwen2.5-0.5B、FP32、AdamW、`batch=1`、`seq_len=768`。四个策略的验证损失一致，因此该次实验没有观察到质量差异；它把比较重点放在内存与效率。[2]
+样例的压力工作负载使用 Qwen2.5-0.5B、FP32、AdamW、`batch=1`、`seq_len=768`。四个策略的验证损失一致，因此该次实验没有观察到质量差异；它把比较重点放在内存与效率。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb)
 
 | 样例策略 | peak allocated | step time | 吞吐 | 相对 baseline 的第一层结论 |
 |---|---:|---:|---:|---|
@@ -404,11 +401,11 @@ def decide_memory_plan(candidates, budget):
 
 ![由原教程样例数据重绘的 AMP 对比图](./figures/datawhale_amp_example.png)
 
-第 73 节还记录了一个 FP32 与 AMP（BF16）的单机对比：`step time` 从 244.490 ms 降至 191.331 ms，约降低 **21.74%**；吞吐从 4.090 增至 5.227 samples/s，约提高 **27.80%**；但 peak allocated 只从 9474.12 MiB 降到 9466.15 MiB，即约 **7.97 MiB**。[1]
+第 73 节还记录了一个 FP32 与 AMP（BF16）的单机对比：`step time` 从 244.490 ms 降至 191.331 ms，约降低 **21.74%**；吞吐从 4.090 增至 5.227 samples/s，约提高 **27.80%**；但 peak allocated 只从 9474.12 MiB 降到 9466.15 MiB，即约 **7.97 MiB**。[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb)
 
 这恰好是一个很好的反直觉例子：AMP 在该样例中带来了明显速度收益，却没有形成实质性 `allocated` 峰值下降。原因可能包括激活以外的显存主导项、某些张量仍保留高精度、allocator 行为以及模型实现细节。正确做法不是从这一个点推断 AMP“省/不省显存”，而是把它作为提醒：**优化手段的作用路径与最终峰值指标之间，并非一一对应。**
 
-> **不可直接横向比较的提醒**：AMP 图和策略图的序列长度、warm-up/测量轮数不同，因此不能把两张图的绝对吞吐或显存数值放到同一排行榜。它们各自只回答自己的控制变量问题。
+**不可直接横向比较的提醒**：AMP 图和策略图的序列长度、warm-up/测量轮数不同，因此不能把两张图的绝对吞吐或显存数值放到同一排行榜。它们各自只回答自己的控制变量问题。
 
 ---
 
@@ -420,13 +417,13 @@ def decide_memory_plan(candidates, budget):
 
 我更倾向于把策略评估写成一个受约束优化问题：
 
-\[
+$$
 \min_{s \in \mathcal{S}}\; M_{peak}(s)\quad
 \text{s.t.}\quad R(s)\ge R_{min},\quad
 \mathcal{L}_{eval}(s)\le \mathcal{L}_{base}(1+\epsilon)
-\]
+$$
 
-其中 \(s\) 是策略或策略组合。只有进入可行集合后，才值得讨论谁“最优”。这正是 76 的 benchmark 和 75 的预算决策应该分工的原因：前者负责提供测量，后者负责表达偏好与约束。
+其中 $`s`$ 是策略或策略组合。只有进入可行集合后，才值得讨论谁“最优”。这正是 76 的 benchmark 和 75 的预算决策应该分工的原因：前者负责提供测量，后者负责表达偏好与约束。
 
 ### 8.2 单点均值仍不够：建议增加置信信息
 
@@ -470,7 +467,7 @@ def decide_memory_plan(candidates, budget):
 | 工作负载 | 模型版本、dtype、batch、seq len、梯度累积、数据样本、seed |
 | 训练 | 优化器、学习率、warm-up、测量步数、评估输入/验证集 |
 | 策略 | checkpoint 粒度、offload 范围、`pin_memory`、混合精度配置 |
-| 约束 | `memory_cap_mb`、`min_samples_per_s`、质量允许退化 \(\epsilon\) |
+| 约束 | `memory_cap_mb`、`min_samples_per_s`、质量允许退化 $`\epsilon`$ |
 
 ### 9.2 实验中：保持可归因
 
@@ -495,22 +492,12 @@ def decide_memory_plan(candidates, budget):
 
 | 编号 | 来源 |
 |---|---|
-| [1] | [Datawhale — 73. Training Performance Analysis][1] |
-| [2] | [Datawhale — 76. Activation Checkpoint Offload Benchmark][2] |
-| [3] | [Datawhale — 75. Memory Budget Compression Project][3] |
-| [4] | [PyTorch Documentation — torch.utils.checkpoint][4] |
-| [5] | [PyTorch Documentation — CUDA semantics: Asynchronous execution][5] |
-| [6] | [PyTorch Documentation — torch.cuda.max_memory_allocated][6] |
-| [7] | [PyTorch Documentation — CUDA semantics: Memory management][7] |
-| [8] | [Datawhale 社区][8] |
-| [9] | [PyTorch Documentation — torch.autograd.graph.save_on_cpu][9] |
-
-[1]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb "Datawhale — 73. Training Performance Analysis"
-[2]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb "Datawhale — 76. Activation Checkpoint Offload Benchmark"
-[3]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/75_Memory_Budget_Compression_Project.ipynb "Datawhale — 75. Memory Budget Compression Project"
-[4]: https://docs.pytorch.org/docs/2.13/checkpoint.html "PyTorch Documentation — torch.utils.checkpoint"
-[5]: https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution "PyTorch Documentation — CUDA semantics: Asynchronous execution"
-[6]: https://pytorch.org/docs/stable/generated/torch.cuda.max_memory_allocated.html "PyTorch Documentation — torch.cuda.max_memory_allocated"
-[7]: https://pytorch.org/docs/stable/notes/cuda.html#memory-management "PyTorch Documentation — CUDA semantics: Memory management"
-[8]: https://datawhale.cn/ "Datawhale 社区"
-[9]: https://docs.pytorch.org/docs/2.13/autograd.html#torch.autograd.graph.save_on_cpu "PyTorch Documentation — torch.autograd.graph.save_on_cpu"
+| [\[1\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb) | [Datawhale — 73. Training Performance Analysis](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/73_Training_Performance_Analysis.ipynb) |
+| [\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb) | [Datawhale — 76. Activation Checkpoint Offload Benchmark](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/76_Activation_Checkpoint_Offload_Benchmark.ipynb) |
+| [\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/75_Memory_Budget_Compression_Project.ipynb) | [Datawhale — 75. Memory Budget Compression Project](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/75_Memory_Budget_Compression_Project.ipynb) |
+| [\[4\]](https://docs.pytorch.org/docs/2.13/checkpoint.html) | [PyTorch Documentation — torch.utils.checkpoint](https://docs.pytorch.org/docs/2.13/checkpoint.html) |
+| [\[5\]](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution) | [PyTorch Documentation — CUDA semantics: Asynchronous execution](https://pytorch.org/docs/stable/notes/cuda.html#asynchronous-execution) |
+| [\[6\]](https://pytorch.org/docs/stable/generated/torch.cuda.max_memory_allocated.html) | [PyTorch Documentation — torch.cuda.max_memory_allocated](https://pytorch.org/docs/stable/generated/torch.cuda.max_memory_allocated.html) |
+| [\[7\]](https://pytorch.org/docs/stable/notes/cuda.html#memory-management) | [PyTorch Documentation — CUDA semantics: Memory management](https://pytorch.org/docs/stable/notes/cuda.html#memory-management) |
+| [\[8\]](https://datawhale.cn/) | [Datawhale 社区](https://datawhale.cn/) |
+| [\[9\]](https://docs.pytorch.org/docs/2.13/autograd.html#torch.autograd.graph.save_on_cpu) | [PyTorch Documentation — torch.autograd.graph.save_on_cpu](https://docs.pytorch.org/docs/2.13/autograd.html#torch.autograd.graph.save_on_cpu) |

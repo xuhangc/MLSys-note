@@ -1,6 +1,6 @@
 # 从采样到连续批处理：LLM 解码策略、推测解码、多 Token 解码与调度学习笔记
 
-> **定位**：这是一份面向 PyTorch 学习者的原创学习笔记。它以“如何把模型的下一个 token 预测，变成可控、可验证、可服务的生成系统”为主线，重新组织并扩展了 DataWhale 社区四篇 Notebook 教程中的问题意识与练习范围，而非逐段复述原教程。[1] [2] [3] [4] [5]
+**定位**：这是一份面向 PyTorch 学习者的原创学习笔记。它以“如何把模型的下一个 token 预测，变成可控、可验证、可服务的生成系统”为主线，重新组织并扩展了 DataWhale 社区四篇 Notebook 教程中的问题意识与练习范围，而非逐段复述原教程。[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode#readme) [\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb) [\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb) [\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb) [\[5\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb)
 
 | 项目 | 内容 |
 | --- | --- |
@@ -14,7 +14,7 @@
 
 ## 0. 先建立一张地图：四个问题，四个层级
 
-自回归语言模型在第 \(t\) 步产生的是一个词表大小的 logit 向量 \(\mathbf z_t\)，而不是一个确定的词。**解码策略**决定如何从这个向量选出 token；**推测解码**尝试减少昂贵目标模型的顺序调用；**多 Token 解码**将“尽可能多推进几步”显式化为候选、验证和回退；**解码调度**则把视野从单个请求移到整批用户请求，决定 GPU 在每一个时刻运行什么。四篇源教程正好覆盖了这一条从概率控制到服务系统的路径。[2] [3] [4] [5]
+自回归语言模型在第 $`t`$ 步产生的是一个词表大小的 logit 向量 $`\mathbf z_t`$，而不是一个确定的词。**解码策略**决定如何从这个向量选出 token；**推测解码**尝试减少昂贵目标模型的顺序调用；**多 Token 解码**将“尽可能多推进几步”显式化为候选、验证和回退；**解码调度**则把视野从单个请求移到整批用户请求，决定 GPU 在每一个时刻运行什么。四篇源教程正好覆盖了这一条从概率控制到服务系统的路径。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb) [\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb) [\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb) [\[5\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb)
 
 | 层级 | 核心问题 | 最关键的约束 | 成功时得到的收益 |
 | --- | --- | --- | --- |
@@ -25,54 +25,54 @@
 
 ![从 logits 到连续批处理的四层地图](./assets/01_sampling_control.png)
 
-> **贯穿全文的判断标准**：不要只问“每次前向快了多少”，而应问“在既定质量约束下，每次昂贵前向平均推进了多少有效 token，以及这是否改善了用户看到的首 token 延迟（TTFT）和后续 token 间延迟（TPOT）”。
+**贯穿全文的判断标准**：不要只问“每次前向快了多少”，而应问“在既定质量约束下，每次昂贵前向平均推进了多少有效 token，以及这是否改善了用户看到的首 token 延迟（TTFT）和后续 token 间延迟（TPOT）”。
 
 ---
 
 ## 1. 共同基础：logits、条件概率、Prefill 与 Decode
 
-给定历史 token \(x_{<t}\)，因果语言模型表示一个条件分布：
+给定历史 token $`x_{<t}`$，因果语言模型表示一个条件分布：
 
-\[
-p_\theta(x_t\mid x_{<t}) = \operatorname{softmax}(\mathbf z_t)_{{x_t}},
+$$
+p_\theta(x_t\mid x_{<t}) = \text{softmax}(\mathbf z_t)_{{x_t}},
 \qquad
-\operatorname{softmax}(z_i)=\frac{e^{z_i}}{\sum_j e^{z_j}}.
-\]
+\text{softmax}(z_i)=\frac{e^{z_i}}{\sum_j e^{z_j}}.
+$$
 
-其中 \(\mathbf z_t\in\mathbb R^{|V|}\) 是 logits；它们可以为任意实数，只有经过 softmax 才成为和为 1 的概率。下面两个阶段常被混淆，但它们的计算形态截然不同。
+其中 $`\mathbf z_t\in\mathbb R^{|V|}`$ 是 logits；它们可以为任意实数，只有经过 softmax 才成为和为 1 的概率。下面两个阶段常被混淆，但它们的计算形态截然不同。
 
 | 阶段 | 输入 | 计算特征 | 主要指标 | 常见优化 |
 | --- | --- | --- | --- | --- |
 | **Prefill** | 整段 prompt | 一次处理多 token，矩阵乘更饱和 | Time to First Token（TTFT） | prefix cache、chunked prefill、长上下文优化 |
 | **Decode** | 已有 KV cache + 1 个新 token | 每轮通常只新增一个 token，频繁且更受带宽/调度影响 | Time Per Output Token（TPOT） | 采样、推测、多 token、continuous batching |
 
-KV cache 让模型无需从头重算历史注意力，但不消除 **decode 的因果依赖**：第 \(t+1\) 个 token 通常需要先知道第 \(t\) 个 token。本文后三章的全部技巧，都是在不违反或不错误近似这个依赖的前提下，减少等待链的有效长度。
+KV cache 让模型无需从头重算历史注意力，但不消除 **decode 的因果依赖**：第 $`t+1`$ 个 token 通常需要先知道第 $`t`$ 个 token。本文后三章的全部技巧，都是在不违反或不错误近似这个依赖的前提下，减少等待链的有效长度。
 
 ---
 
 # 2. 解码策略：把 logits 改造成“可控的抽样空间”
 
-源教程将 temperature、Top-k 与 Top-p 串成一个最小采样流程。[2] 我建议把它理解为两类不同操作：**温度改变分布形状**，而 **Top-k / Top-p 限制分布支持集**。最后才执行 softmax 重归一化与随机采样。
+源教程将 temperature、Top-k 与 Top-p 串成一个最小采样流程。[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb) 我建议把它理解为两类不同操作：**温度改变分布形状**，而 **Top-k / Top-p 限制分布支持集**。最后才执行 softmax 重归一化与随机采样。
 
 ## 2.1 Temperature：调节“相信第一名”的程度
 
-温度 \(T>0\) 在 softmax 前缩放 logits：
+温度 $`T>0`$ 在 softmax 前缩放 logits：
 
-\[
+$$
 p_T(i)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)}.
-\]
+$$
 
-当 \(0<T<1\) 时，logit 差距被放大，分布更尖锐；\(T>1\) 时，分布被拉平。在极限意义上，\(T\to0^+\) 接近贪心选择，但实践中不能直接除以零。温度不会改变 token 的排序；它改变的是不同排名 token 之间的相对概率比。
+当 $`0<T<1`$ 时，logit 差距被放大，分布更尖锐；$`T>1`$ 时，分布被拉平。在极限意义上，$`T\to0^+`$ 接近贪心选择，但实践中不能直接除以零。温度不会改变 token 的排序；它改变的是不同排名 token 之间的相对概率比。
 
 ## 2.2 Top-k 与 Top-p：固定“个数”还是固定“概率质量”
 
-Top-k 保留 logits 最大的 \(k\) 个 token，其他位置设为 \(-\infty\)。这样 softmax 后被屏蔽位置恰为零概率。Top-p（nucleus sampling）按概率降序累加，只保留使累计质量刚刚达到阈值 \(p\) 的最短前缀；分布尖锐时保留很少候选，分布平坦时自动保留更多候选。
+Top-k 保留 logits 最大的 $`k`$ 个 token，其他位置设为 $`-\infty`$。这样 softmax 后被屏蔽位置恰为零概率。Top-p（nucleus sampling）按概率降序累加，只保留使累计质量刚刚达到阈值 $`p`$ 的最短前缀；分布尖锐时保留很少候选，分布平坦时自动保留更多候选。
 
 | 方法 | 约束对象 | 长处 | 常见误区 |
 | --- | --- | --- | --- |
 | Greedy / argmax | 只取一个最大值 | 可重复、稳定、适合确定性评测 | 容易模式重复，不能表达多解任务 |
 | Temperature | 整个分布的锐度 | 连续可调，保留排序 | 不能自行切掉极低概率尾部 |
-| Top-k | 候选数 | 计算和行为直观 | 同一 \(k\) 面对尖锐/平坦分布的意义不同 |
+| Top-k | 候选数 | 计算和行为直观 | 同一 $`k`$ 面对尖锐/平坦分布的意义不同 |
 | Top-p | 概率质量 | 支持集自适应 | 必须保留“跨阈值的边界 token”，否则概率质量会不足 |
 
 ![温度、Top-k 与 Top-p 如何改变候选空间](./assets/01_sampling_control.png)
@@ -85,13 +85,11 @@ Top-k 保留 logits 最大的 \(k\) 个 token，其他位置设为 \(-\infty\)�
 import torch
 import torch.nn.functional as F
 
-
 def temperature_scale(logits: torch.Tensor, temperature: float) -> torch.Tensor:
     """将形状为 [..., vocab_size] 的 logits 按温度缩放。"""
     if temperature <= 0:
         raise ValueError("temperature must be positive")
     return logits / temperature
-
 
 def filter_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
     """每一行只保留最大的 k 个 logit，其余置为 -inf。"""
@@ -103,7 +101,6 @@ def filter_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
     remove_mask = torch.ones_like(logits, dtype=torch.bool)
     remove_mask.scatter_(-1, kept_indices, False)
     return logits.masked_fill(remove_mask, -torch.inf)
-
 
 def filter_top_p(
     logits: torch.Tensor,
@@ -133,7 +130,6 @@ def filter_top_p(
     )
     return logits.masked_fill(remove_mask, -torch.inf)
 
-
 def sample_next_token(
     logits: torch.Tensor,
     *,
@@ -158,7 +154,7 @@ def sample_next_token(
     return token_ids, final_probs
 ```
 
-这段实现有五个值得停下来看的细节。第一，`topk(...).indices` 得到的是 **索引**，再用 `scatter_` 构造布尔掩码；这比用“第 k 大阈值”更明确地表示“恰好保留 k 个”，也避免相同 logit 边界时候选数歧义。第二，Top-p 必须先排序才可做 `cumsum`，然后利用原索引 `scatter` 回写到词表原顺序。第三，`-torch.inf` 是正确的屏蔽值，因为 \(\exp(-\infty)=0\)。第四，top-p 的右移非常关键：若不右移，第一个超过 \(p\) 的 token 也会被删除。第五，采样发生在**筛选后重新归一化**的分布上，`torch.multinomial` 接受的是概率而非 logits。
+这段实现有五个值得停下来看的细节。第一，`topk(...).indices` 得到的是 **索引**，再用 `scatter_` 构造布尔掩码；这比用“第 k 大阈值”更明确地表示“恰好保留 k 个”，也避免相同 logit 边界时候选数歧义。第二，Top-p 必须先排序才可做 `cumsum`，然后利用原索引 `scatter` 回写到词表原顺序。第三，`-torch.inf` 是正确的屏蔽值，因为 $`\exp(-\infty)=0`$。第四，top-p 的右移非常关键：若不右移，第一个超过 $`p`$ 的 token 也会被删除。第五，采样发生在**筛选后重新归一化**的分布上，`torch.multinomial` 接受的是概率而非 logits。
 
 ## 2.4 用精确图表验证直觉
 
@@ -197,25 +193,25 @@ print(final_probs)
 
 # 3. 推测解码：用接受—拒绝采样守住目标分布
 
-推测解码的正确目标不是“让小模型代替大模型”，而是：**让小模型提出 \(K\) 个候选，再让目标模型在一次较宽的前向中验证这些位置；在统计意义上，最终输出仍服从目标模型分布。**源教程聚焦于单 token 接受概率与首次拒绝的控制流。[3]
+推测解码的正确目标不是“让小模型代替大模型”，而是：**让小模型提出 $`K`$ 个候选，再让目标模型在一次较宽的前向中验证这些位置；在统计意义上，最终输出仍服从目标模型分布。**源教程聚焦于单 token 接受概率与首次拒绝的控制流。[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb)
 
 ![草稿模型批量提议、目标模型验证与残差修正](./assets/02_speculative_verification.png)
 
 ## 3.1 接受概率来自哪里？
 
-记草稿模型在某一位置的分布为 \(q\)，目标模型分布为 \(p\)，草稿采出的候选 token 为 \(x\)。接受概率定义为：
+记草稿模型在某一位置的分布为 $`q`$，目标模型分布为 $`p`$，草稿采出的候选 token 为 $`x`$。接受概率定义为：
 
-\[
+$$
 \alpha(x)=\min\left(1,\frac{p(x)}{q(x)}\right).
-\]
+$$
 
-当 \(p(x)\ge q(x)\) 时，目标模型至少和草稿模型一样认可该 token，直接接受；当 \(p(x)<q(x)\) 时，以 \(p(x)/q(x)\) 的概率接受。**最关键、也最容易被省略的一步**是：一旦拒绝，不能任意让目标模型再采一个 token，而要从残差分布中采样：
+当 $`p(x)\ge q(x)`$ 时，目标模型至少和草稿模型一样认可该 token，直接接受；当 $`p(x)<q(x)`$ 时，以 $`p(x)/q(x)`$ 的概率接受。**最关键、也最容易被省略的一步**是：一旦拒绝，不能任意让目标模型再采一个 token，而要从残差分布中采样：
 
-\[
+$$
 r(y)=\frac{\max(p(y)-q(y),0)}{\sum_v\max(p(v)-q(v),0)}.
-\]
+$$
 
-这个残差修正补回了草稿分布相对目标分布“欠采样”的那部分质量。只有把“接受规则 + 残差采样 + 首次拒绝停止”组合在一起，才能讨论分布严格等价；只检查 \(p/q\) 然后直接停止，是很好的控制流练习，却不是完整的无偏采样器。
+这个残差修正补回了草稿分布相对目标分布“欠采样”的那部分质量。只有把“接受规则 + 残差采样 + 首次拒绝停止”组合在一起，才能讨论分布严格等价；只检查 $`p/q`$ 然后直接停止，是很好的控制流练习，却不是完整的无偏采样器。
 
 ## 3.2 一轮精确推测解码的完整实现
 
@@ -226,7 +222,6 @@ from dataclasses import dataclass
 from typing import Sequence
 import torch
 
-
 @dataclass(frozen=True)
 class SpeculativeResult:
     output_tokens: list[int]
@@ -234,7 +229,6 @@ class SpeculativeResult:
     rejection_index: int | None
     repair_token: int
     events: list[str]
-
 
 def normalise_distribution(distribution: torch.Tensor) -> torch.Tensor:
     """检查并规范化一维 categorical 分布。"""
@@ -244,7 +238,6 @@ def normalise_distribution(distribution: torch.Tensor) -> torch.Tensor:
         raise ValueError("a categorical distribution needs positive mass")
     return distribution / total
 
-
 def residual_distribution(target: torch.Tensor, draft: torch.Tensor) -> torch.Tensor:
     """返回 max(target - draft, 0) 的归一化残差分布。"""
     target = normalise_distribution(target)
@@ -252,10 +245,8 @@ def residual_distribution(target: torch.Tensor, draft: torch.Tensor) -> torch.Te
     residual = (target - draft).clamp_min(0)
     return normalise_distribution(residual) if residual.sum() > 1e-12 else target
 
-
 def categorical_draw(probabilities: torch.Tensor, generator: torch.Generator) -> int:
     return int(torch.multinomial(normalise_distribution(probabilities), 1, generator=generator).item())
-
 
 def speculative_round(
     draft_probs: torch.Tensor,
@@ -292,7 +283,7 @@ def speculative_round(
     return SpeculativeResult(output, k, None, extra, events)
 ```
 
-每一轮验证都必须从左至右看候选。原因不是实现习惯，而是条件概率变了：若第 \(i\) 个候选被拒绝，则原草稿序列第 \(i+1\) 个 token 是在错误前缀下提出的，不能继续沿用。`residual_distribution` 使用 `clamp_min(0)` 实现公式中的 \(\max\)，而不是将 \(p-q\) 直接归一化；后者可能产生负概率。
+每一轮验证都必须从左至右看候选。原因不是实现习惯，而是条件概率变了：若第 $`i`$ 个候选被拒绝，则原草稿序列第 $`i+1`$ 个 token 是在错误前缀下提出的，不能继续沿用。`residual_distribution` 使用 `clamp_min(0)` 实现公式中的 $`\max`$，而不是将 $`p-q`$ 直接归一化；后者可能产生负概率。
 
 下面是一个稳定触发“接受第一个、拒绝第二个、残差修复”的玩具示例。它与真实模型质量无关，目的是暴露全部分支。
 
@@ -319,14 +310,14 @@ print(result)
 
 ## 3.3 速度不是“凭空产生”的：接受率决定上限
 
-若一轮草稿长度为 \(K\)，接受前缀长度为 \(A\)，则本轮至少推进 \(A+1\) 个最终 token（`+1` 是拒绝时的修复 token，或全接受时的额外目标 token）。理想情况下目标模型一次前向能够同时验证这些位置；但实际加速比还会被草稿模型成本、目标模型批量验证开销、KV cache 读写和服务批处理策略折损。
+若一轮草稿长度为 $`K`$，接受前缀长度为 $`A`$，则本轮至少推进 $`A+1`$ 个最终 token（`+1` 是拒绝时的修复 token，或全接受时的额外目标 token）。理想情况下目标模型一次前向能够同时验证这些位置；但实际加速比还会被草稿模型成本、目标模型批量验证开销、KV cache 读写和服务批处理策略折损。
 
 | 观察量 | 它真正说明什么 | 低时应该先查什么 |
 | --- | --- | --- |
-| 平均接受长度 \(E[A]\) | 草稿和目标在真实 prompt 分布上的一致程度 | 草稿模型是否过弱、采样参数是否不一致、候选 \(K\) 是否过长 |
+| 平均接受长度 $`E[A]`$ | 草稿和目标在真实 prompt 分布上的一致程度 | 草稿模型是否过弱、采样参数是否不一致、候选 $`K`$ 是否过长 |
 | 目标模型每步验证开销 | 能否把宽验证转化为较少的顺序轮数 | 硬件批处理效率、KV cache、算子实现 |
 | 端到端 TPOT | 用户真正感受到的后续生成速度 | 草稿开销、调度等待、网络流式输出 |
-| 质量等价性 | 是否保留目标模型分布 | 是否遗漏残差采样、是否在不一致的采样分布上比较 \(p\) 与 \(q\) |
+| 质量等价性 | 是否保留目标模型分布 | 是否遗漏残差采样、是否在不一致的采样分布上比较 $`p`$ 与 $`q`$ |
 
 **我的思考**：推测解码的核心 KPI 不是“草稿模型有多小”，而是“草稿模型以多低成本换来多长的可接受前缀”。一个稍大的草稿模型若显著提高接受率，完全可能优于极小但经常首 token 就被拒绝的草稿模型。因此，应在真实工作负载上联合扫 `K`、草稿规模、temperature / top-p 与批大小，而不是单独优化任一指标。
 
@@ -334,7 +325,7 @@ print(result)
 
 # 4. 多 Token 解码：候选可以并行，接受必须尊重前缀
 
-多 Token 解码强调在一次解码轮内**提出多个未来位置的候选**，尽可能把连续通过验证的前缀写入输出。它与推测解码共享“提议—验证—回退”的运行时形态，但两者不是同义词：候选可能来自一个独立草稿模型、同一主干上的附加预测头，或其他 lookahead 结构。源教程用一个简化模拟器把候选截取、逐项验证、首次拒绝和后缀回退清楚拆开。[4]
+多 Token 解码强调在一次解码轮内**提出多个未来位置的候选**，尽可能把连续通过验证的前缀写入输出。它与推测解码共享“提议—验证—回退”的运行时形态，但两者不是同义词：候选可能来自一个独立草稿模型、同一主干上的附加预测头，或其他 lookahead 结构。源教程用一个简化模拟器把候选截取、逐项验证、首次拒绝和后缀回退清楚拆开。[\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb)
 
 ![候选可并行提出，验证必须从左到右](./assets/03_multitoken_lookahead.png)
 
@@ -345,7 +336,7 @@ print(result)
 | 概念 | 推测解码 | 本节的多 Token 观察器 |
 | --- | --- | --- |
 | 候选来源 | 常见为独立草稿模型 | 可来自草稿模型或同主干的多个预测头 |
-| 接受规则 | \(\min(1,p/q)\) + 残差采样，可分布等价 | 概率比阈值，仅用于解释性模拟 |
+| 接受规则 | $`\min(1,p/q)`$ + 残差采样，可分布等价 | 概率比阈值，仅用于解释性模拟 |
 | 首次拒绝后 | 停止当前草稿后缀并执行修复采样 | 标出回退后缀，交回后续生成路径 |
 | 关注点 | 无偏采样与速度 | 多步提议、前缀依赖、rollback 的系统语义 |
 
@@ -356,14 +347,12 @@ from dataclasses import dataclass
 from typing import Sequence
 import torch
 
-
 @dataclass(frozen=True)
 class LookaheadRound:
     proposed: list[int]
     accepted_prefix: list[int]
     first_rejected_at: int | None
     rollback_suffix: list[int]
-
 
 class LookaheadVerifier:
     """用于展示 multi-token 控制流的教学模拟器，而非精确采样器。"""
@@ -424,7 +413,7 @@ print(round_info)
 
 ## 4.3 训练端与推理端必须协同设计
 
-多 Token 的收益并非只由推理端决定。若模型的 \(+2\)、\(+3\) 位置预测头缺少足够准确的训练信号，候选长度加大反而会放大回滚。因此，训练目标、候选深度、验证规则、KV cache 写入与回滚策略应共同评估。
+多 Token 的收益并非只由推理端决定。若模型的 $`+2`$、$`+3`$ 位置预测头缺少足够准确的训练信号，候选长度加大反而会放大回滚。因此，训练目标、候选深度、验证规则、KV cache 写入与回滚策略应共同评估。
 
 | 决策 | 太激进的后果 | 太保守的后果 | 更稳妥的做法 |
 | --- | --- | --- | --- |
@@ -439,7 +428,7 @@ print(round_info)
 
 # 5. 解码调度：从单请求优化走向连续批处理
 
-当服务同时处理多个用户请求时，系统同时面对刚到达的长 prompt、已经 prefill 完成的短 decode、cache 命中请求和不同业务优先级。源教程的调度器以请求状态、排序键、单步状态推进和循环运行构成了一个可运行最小闭环。[5]
+当服务同时处理多个用户请求时，系统同时面对刚到达的长 prompt、已经 prefill 完成的短 decode、cache 命中请求和不同业务优先级。源教程的调度器以请求状态、排序键、单步状态推进和循环运行构成了一个可运行最小闭环。[\[5\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb)
 
 ![连续批处理：每一 tick 重算 batch，而不是排队到底](./assets/04_continuous_batching.png)
 
@@ -447,9 +436,9 @@ print(round_info)
 
 连续批处理（continuous batching）的关键不在“把所有请求凑成一个永不变化的大 batch”，而在每次模型前向后重新检查：谁结束了、谁进入 decode、谁刚到达、当前 token / KV cache 预算还能容纳谁。下表给出一个透明但简化的优先级框架。
 
-\[
+$$
 \text{rank}(r)=(\text{phase},\ \text{cache},\ -[\text{priority}+\text{aging}],\ \text{prompt\_tokens},\ \text{id}).
-\]
+$$
 
 排序元组越小越优先。这里将 decode 排在 prefill 前，以降低活跃流式请求的 TPOT；cache hit 获得优先权；`aging` 防止低优先级请求无限饥饿。不同产品可改变该策略，但必须明确自己交换了什么。
 
@@ -462,7 +451,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 Phase = Literal["prefill", "decode", "finished"]
-
 
 @dataclass
 class Request:
@@ -484,7 +472,6 @@ class Request:
     def waiting_ticks(self) -> int:
         return getattr(self, "_waiting_ticks", 0)
 
-
 @dataclass(frozen=True)
 class ScheduleEvent:
     tick: int
@@ -492,7 +479,6 @@ class ScheduleEvent:
     phase: str
     action: str
     generated_tokens: int
-
 
 class ContinuousBatchScheduler:
     """可检查的 continuous-batching 教学模拟器。"""
@@ -667,7 +653,7 @@ for event in events:
 | 采样器单元测试 | 对随机 `[B,V]` logits，验证筛选后概率和为 1，Top-k 的非零 token 数不超过 k | 测 `k=1`、`k>=V`、`p=1` 和极端温度 |
 | Top-p 边界实验 | 构造累计概率恰好等于 p 的例子 | 解释为何要保留边界 token，并比较右移与未右移掩码 |
 | 推测解码蒙特卡洛验证 | 重复运行 toy distribution，比较输出频率与 target distribution | 分别运行“有残差修正”和“没有残差修正”，观察偏差 |
-| 候选长度扫描 | 对不同 K 统计平均 accepted prefix length | 报告 \(E[A]\)、总草稿开销和端到端时间，而不是只报告 K |
+| 候选长度扫描 | 对不同 K 统计平均 accepted prefix length | 报告 $`E[A]`$、总草稿开销和端到端时间，而不是只报告 K |
 | 调度策略比较 | 实现 FIFO、decode-first 与 aging 三种 rank | 在相同到达序列上比较平均 / P95 TTFT 和 TPOT |
 
 ---
@@ -682,20 +668,20 @@ python3 decoding_examples.py
 
 四张概念图通过 GPT-Image-2 为本文原创生成，文件位于 `assets/01_sampling_control.png` 至 `assets/04_continuous_batching.png`。两张数据图由 `decoding_examples.py` 中的 Matplotlib 函数生成，分别位于 `assets/05_sampling_probability_comparison.png` 和 `assets/06_scheduler_timeline.png`。
 
-> **对 DataWhale 的致谢与许可提醒**：本文学习路径、主题选择和引用来源来自 DataWhale 社区的 `llm-algo-leetcode`。该仓库说明其 Notebook 中的文字、公式与图示说明采用 **CC BY 4.0**，代码单元采用 **Apache-2.0**；若继续转载、改编或将本文与源教程内容混合发布，请按对应内容类型保留署名并遵守原许可。[1]
+**对 DataWhale 的致谢与许可提醒**：本文学习路径、主题选择和引用来源来自 DataWhale 社区的 `llm-algo-leetcode`。该仓库说明其 Notebook 中的文字、公式与图示说明采用 **CC BY 4.0**，代码单元采用 **Apache-2.0**；若继续转载、改编或将本文与源教程内容混合发布，请按对应内容类型保留署名并遵守原许可。[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode#readme)
 
 ---
 
 # 参考资料
 
-[1] [DataWhale 社区：llm-algo-leetcode 项目说明、在线阅读与混合内容许可](https://github.com/datawhalechina/llm-algo-leetcode#readme)
+[\[1\]](https://github.com/datawhalechina/llm-algo-leetcode#readme) [DataWhale 社区：llm-algo-leetcode 项目说明、在线阅读与混合内容许可](https://github.com/datawhalechina/llm-algo-leetcode#readme)
 
-[2] [DataWhale：21. Decoding Strategies | 解码策略](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb)
+[\[2\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb) [DataWhale：21. Decoding Strategies | 解码策略](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/21_Decoding_Strategies.ipynb)
 
-[3] [DataWhale：23. Speculative Decoding | 投机解码](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb)
+[\[3\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb) [DataWhale：23. Speculative Decoding | 投机解码](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/23_Speculative_Decoding.ipynb)
 
-[4] [DataWhale：35. Multi-Token Decoding | 多 Token 解码](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb)
+[\[4\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb) [DataWhale：35. Multi-Token Decoding | 多 Token 解码](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/35_Multi_Token_Decoding.ipynb)
 
-[5] [DataWhale：36. Decode Scheduling | 解码调度](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb)
+[\[5\]](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb) [DataWhale：36. Decode Scheduling | 解码调度](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/36_Decode_Scheduling.ipynb)
 
-[6] [DataWhale：llm-algo-leetcode 在线教程](https://datawhalechina.github.io/llm-algo-leetcode/)
+[\[6\]](https://datawhalechina.github.io/llm-algo-leetcode/) [DataWhale：llm-algo-leetcode 在线教程](https://datawhalechina.github.io/llm-algo-leetcode/)
