@@ -1,0 +1,10 @@
+flowchart LR
+    A[固定工作负载<br/>模型、数据、batch、seq、seed] --> B[建立 Baseline<br/>warm-up + 多轮测量]
+    B --> C[定位瓶颈<br/>数据 / 前向 / 反向 / 优化器 / 同步]
+    C --> D[单变量策略实验<br/>checkpoint / offload / hybrid]
+    D --> E[统一记录<br/>allocated、reserved、step time、吞吐、eval loss]
+    E --> F{预算门槛<br/>显存、速度、质量}
+    F -->|全部通过且收益显著| G[accept<br/>进入训练计划]
+    F -->|可行但收益不足| H[tune<br/>调整粒度或压力]
+    F -->|任一硬约束失败| I[reject<br/>回退并重新设计]
+    H --> D
