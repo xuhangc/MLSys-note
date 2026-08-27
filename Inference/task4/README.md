@@ -248,10 +248,10 @@ SGLang 提出的 RadixAttention 将 token 序列作为键、KV Cache 作为值�
 令当前请求为 $x$、树中一条缓存路径为 $c_j$，最长可复用长度可以抽象为：
 
 $$
-H(x) = \max_j \operatorname{LCP}(x, c_j),
+H(x) = \max_j \mathrm{LCP}(x, c_j),
 $$
 
-其中 $\operatorname{LCP}$ 表示最长**公共前缀**的长度。这里的“前缀”有严格含义：中间出现的一段相同 token 不可直接复用，因为该 token 的 K/V 表示依赖此前全部上下文。
+其中 $\mathrm{LCP}$ 表示最长**公共前缀**的长度。这里的“前缀”有严格含义：中间出现的一段相同 token 不可直接复用，因为该 token 的 K/V 表示依赖此前全部上下文。
 
 ### 3.2 可运行代码：压缩边、分裂与最长前缀匹配
 
