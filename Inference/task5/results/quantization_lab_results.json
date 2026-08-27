@@ -1,0 +1,41 @@
+{
+  "lab_results": {
+    "per_tensor_output_mse": 0.0109104142,
+    "group32_output_mse": 0.00131809,
+    "group8_output_mse": 0.0002716771,
+    "gptq_like_output_mse": 0.0011085351,
+    "awq_inspired_output_mse": 0.0065622418,
+    "w8a16_output_mse": 1.4024e-06,
+    "fp8_e4m3_relative_mse": 0.000747683,
+    "key_4bit_relative_mse": 0.0030168099,
+    "value_4bit_relative_mse": 0.0029875559,
+    "fp16_cpu_ms": 0.004909,
+    "fake_w8a16_cpu_ms": 0.6472325799,
+    "fp16_7b_weight_gb": 14.0,
+    "int8_7b_weight_gb": 7.0,
+    "int4_7b_weight_gb": 3.5
+  },
+  "deployment_example": {
+    "baseline": {
+      "name": "FP16 baseline",
+      "latency_ms": 42.0,
+      "throughput_tokens_s": 100.0,
+      "vram_mb": 14000.0,
+      "quality_error": 0.0,
+      "quality_budget": 0.02,
+      "kernel_supported": true
+    },
+    "candidate": {
+      "name": "INT4 candidate",
+      "latency_ms": 39.0,
+      "throughput_tokens_s": 118.0,
+      "vram_mb": 4200.0,
+      "quality_error": 0.006562241818755865,
+      "quality_budget": 0.02,
+      "kernel_supported": true
+    },
+    "decision": "accept",
+    "reason": "容量收益成立，且同一工作负载下至少一个性能指标改善。",
+    "warning": "These deployment numbers are deliberately illustrative policy inputs, not backend measurements."
+  }
+}
