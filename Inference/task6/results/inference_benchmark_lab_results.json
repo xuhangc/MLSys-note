@@ -1,0 +1,209 @@
+{
+  "notice": "All values are deterministic teaching scenarios, not LLM or serving-backend measurements.",
+  "workload_contract": {
+    "name": "long-context interactive scenario",
+    "model": "illustrative-7b",
+    "backend": "same-backend-for-comparison",
+    "batch_size": 2,
+    "prompt_tokens": 2048,
+    "generated_tokens": 128,
+    "dtype": "bf16",
+    "cache_policy": "baseline-none",
+    "warmup_runs": 5
+  },
+  "general_benchmark": {
+    "baseline": {
+      "label": "baseline",
+      "ttft_ms": 260.0,
+      "tpot_ms": 1.406,
+      "total_ms": 440.0,
+      "throughput_tokens_s": 581.818,
+      "prefill_share": 0.5909,
+      "decode_share": 0.4091,
+      "peak_memory_mb": 10800.0,
+      "quality_passed": true
+    },
+    "candidate": {
+      "label": "candidate",
+      "ttft_ms": 265.0,
+      "tpot_ms": 0.984,
+      "total_ms": 391.0,
+      "throughput_tokens_s": 654.731,
+      "prefill_share": 0.6777,
+      "decode_share": 0.3223,
+      "peak_memory_mb": 9900.0,
+      "quality_passed": true
+    },
+    "comparison": {
+      "ttft_improvement_ms": -5.0,
+      "tpot_improvement_ms": 0.422,
+      "total_latency_improvement_ms": 49.0,
+      "memory_saved_mb": 900.0,
+      "throughput_gain": 0.1253,
+      "quality_passed": true
+    },
+    "candidate_diagnosis": {
+      "bottleneck": "prefill-bound",
+      "reason": "Prefill 占总时延的 60% 以上；优先检查 prompt 复用、attention 和预填充批处理。"
+    },
+    "decision": {
+      "decision": "accept",
+      "reason": "吞吐提升达标，且 TTFT 回归仍在预先声明的交互预算内。"
+    }
+  },
+  "speculative_scenario": {
+    "selected": {
+      "acceptance_rate": 0.8,
+      "draft_tokens": 4.0,
+      "expected_tokens_per_target_call": 3.3616,
+      "estimated_target_calls": 39.0,
+      "baseline_ms": 128.0,
+      "speculative_ms": 109.98,
+      "estimated_speedup": 1.1638,
+      "draft_cost_share": 0.1135,
+      "verify_cost_share": 0.8865
+    },
+    "decision": {
+      "decision": "accept",
+      "reason": "在该成本模型中，接受率与端到端速度模型均达到阈值。"
+    },
+    "acceptance_frontier": [
+      {
+        "acceptance_rate": 0.0,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 1.0,
+        "estimated_target_calls": 128.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 360.96,
+        "estimated_speedup": 0.3546,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 0.2,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 1.2496,
+        "estimated_target_calls": 103.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 290.46,
+        "estimated_speedup": 0.4407,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 0.4,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 1.6496,
+        "estimated_target_calls": 78.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 219.96,
+        "estimated_speedup": 0.5819,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 0.6,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 2.3056,
+        "estimated_target_calls": 56.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 157.92,
+        "estimated_speedup": 0.8105,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 0.8,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 3.3616,
+        "estimated_target_calls": 39.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 109.98,
+        "estimated_speedup": 1.1638,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 0.9,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 4.0951,
+        "estimated_target_calls": 32.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 90.24,
+        "estimated_speedup": 1.4184,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      },
+      {
+        "acceptance_rate": 1.0,
+        "draft_tokens": 4.0,
+        "expected_tokens_per_target_call": 5.0,
+        "estimated_target_calls": 26.0,
+        "baseline_ms": 128.0,
+        "speculative_ms": 73.32,
+        "estimated_speedup": 1.7458,
+        "draft_cost_share": 0.1135,
+        "verify_cost_share": 0.8865
+      }
+    ]
+  },
+  "prefix_cache_scenario": {
+    "events": [
+      {
+        "request_id": "r1",
+        "prefix_key": "policy-v1",
+        "cache_hit": false,
+        "prompt_tokens": 1020,
+        "saved_prefill_tokens": 0
+      },
+      {
+        "request_id": "r2",
+        "prefix_key": "policy-v1",
+        "cache_hit": true,
+        "prompt_tokens": 1040,
+        "saved_prefill_tokens": 900
+      },
+      {
+        "request_id": "r3",
+        "prefix_key": "product-doc-a",
+        "cache_hit": false,
+        "prompt_tokens": 860,
+        "saved_prefill_tokens": 0
+      },
+      {
+        "request_id": "r4",
+        "prefix_key": "policy-v1",
+        "cache_hit": true,
+        "prompt_tokens": 1000,
+        "saved_prefill_tokens": 900
+      },
+      {
+        "request_id": "r5",
+        "prefix_key": "product-doc-a",
+        "cache_hit": true,
+        "prompt_tokens": 830,
+        "saved_prefill_tokens": 700
+      },
+      {
+        "request_id": "r6",
+        "prefix_key": "one-off",
+        "cache_hit": false,
+        "prompt_tokens": 610,
+        "saved_prefill_tokens": 0
+      }
+    ],
+    "summary": {
+      "request_count": 6.0,
+      "cache_hits": 3.0,
+      "hit_rate": 0.5,
+      "saved_prefill_tokens": 2500.0,
+      "gross_saved_ms": 875.0,
+      "maintenance_ms": 72.0,
+      "net_saved_ms": 803.0
+    },
+    "decision": {
+      "decision": "accept",
+      "reason": "命中率与净 prefill 节省均为正，值得进入真实服务评估。"
+    }
+  }
+}
