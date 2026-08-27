@@ -1,0 +1,98 @@
+{
+  "weight_methods": [
+    {
+      "method": "FP16 reference",
+      "weight_mse": 0.0,
+      "calibration_output_mse": 0.0,
+      "evaluation_output_mse": 0.0,
+      "logical_weight_bytes": 2304.0,
+      "relative_to_fp16_percent": 100.0,
+      "notes": "Reference (logical FP16 storage)."
+    },
+    {
+      "method": "W8A16 per-tensor",
+      "weight_mse": 9.435619722353294e-05,
+      "calibration_output_mse": 0.009119000285863876,
+      "evaluation_output_mse": 0.008953149430453777,
+      "logical_weight_bytes": 1156.0,
+      "relative_to_fp16_percent": 50.173611111111114,
+      "notes": "Codes plus FP32 scale metadata; excludes alignment and packing headers."
+    },
+    {
+      "method": "W4 per-tensor",
+      "weight_mse": 0.030597511678934097,
+      "calibration_output_mse": 2.9159300327301025,
+      "evaluation_output_mse": 2.880634307861328,
+      "logical_weight_bytes": 580.0,
+      "relative_to_fp16_percent": 25.17361111111111,
+      "notes": "Codes plus FP32 scale metadata; excludes alignment and packing headers."
+    },
+    {
+      "method": "W4 group-wise",
+      "weight_mse": 0.004567708820104599,
+      "calibration_output_mse": 0.36588335037231445,
+      "evaluation_output_mse": 0.36379003524780273,
+      "logical_weight_bytes": 864.0,
+      "relative_to_fp16_percent": 37.5,
+      "notes": "Codes plus FP32 scale metadata; excludes alignment and packing headers."
+    },
+    {
+      "method": "GPTQ-like W4",
+      "weight_mse": 0.004867134150117636,
+      "calibration_output_mse": 0.35096386075019836,
+      "evaluation_output_mse": 0.37789687514305115,
+      "logical_weight_bytes": 864.0,
+      "relative_to_fp16_percent": 37.5,
+      "notes": "Codes plus FP32 scale metadata; excludes alignment and packing headers."
+    },
+    {
+      "method": "AWQ-like W4",
+      "weight_mse": 0.004744552541524172,
+      "calibration_output_mse": 0.2709955871105194,
+      "evaluation_output_mse": 0.2618156671524048,
+      "logical_weight_bytes": 864.0,
+      "relative_to_fp16_percent": 37.5,
+      "notes": "Codes plus FP32 scale metadata; excludes alignment and packing headers.",
+      "selected_activation_scale_alpha": 0.25
+    }
+  ],
+  "kv_cache_methods": [
+    {
+      "method": "FP16 reference",
+      "kv_mse": 0.0,
+      "attention_output_mse": 0.0,
+      "logical_kv_bytes": 49152.0,
+      "relative_to_fp16_percent": 100.0,
+      "scale_shape": "reference",
+      "notes": "Reference (logical FP16 storage)."
+    },
+    {
+      "method": "FP8 per-vector scale",
+      "kv_mse": 8.9501183538232e-05,
+      "attention_output_mse": 9.40273537068879e-06,
+      "logical_kv_bytes": 26112.0,
+      "relative_to_fp16_percent": 53.125,
+      "scale_shape": [
+        2,
+        4,
+        48,
+        1
+      ],
+      "notes": "1-byte teaching low-precision codes plus FP32 scale metadata."
+    },
+    {
+      "method": "FP8 group scale (16)",
+      "kv_mse": 3.444689718890004e-05,
+      "attention_output_mse": 4.34651936363212e-06,
+      "logical_kv_bytes": 30720.0,
+      "relative_to_fp16_percent": 62.5,
+      "scale_shape": [
+        2,
+        4,
+        48,
+        4
+      ],
+      "notes": "1-byte teaching low-precision codes plus FP32 scale metadata."
+    }
+  ]
+}
