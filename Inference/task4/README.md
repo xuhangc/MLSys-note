@@ -1,6 +1,6 @@
 # 从“存得下”到“复用好”：KV Cache、PagedAttention、RadixAttention 与推理调度学习笔记
 
-> **定位。** 本文是一份面向 LLM 推理工程学习者的原创学习笔记。它以“有限的 GPU KV Cache 应如何被**计量、分页、共享、调度与验证**”为主线，重新组织并扩展 DataWhale 社区六份 Notebook 的问题意识与练习范围，而非逐段复述原教程。文中的 Python 实验代码均为重新编写的教学实现；图 1–4 为 GPT-Image-2 原创概念图，图 5–7 则由随附脚本精确绘制。[1] [2] [3] [4] [5] [6]
+> **定位。** 本文是一份面向 LLM 推理工程学习者的原创学习笔记。它以“有限的 GPU KV Cache 应如何被**计量、分页、共享、调度与验证**”为主线，重新组织并扩展 DataWhale 社区六份 Notebook 的问题意识与练习范围，而非逐段复述原教程。文中的 Python 实验代码均为重新编写的教学实现；图 1–4 为 GPT-Image-2 原创概念图，图 5–7 则由随附脚本精确绘制。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb) [2](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb) [3](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb) [4](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb) [5](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb) [6](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb)
 
 | 项目 | 内容 |
 | --- | --- |
@@ -17,7 +17,7 @@
 
 ## 0. 先建立系统地图：KV Cache 不只是一个 Tensor
 
-自回归模型在第 $t$ 步要让当前 Query 与全部历史 Key/Value 发生注意力计算。若每一步都重算历史 token 的 K/V 投影，计算会随生成过程反复发生；因此推理系统会把已完成 token 的 K/V 状态保存在 GPU 上，并让下一个 token 直接读取它们。这就是 **KV Cache** 的直接价值，也是长上下文、并发服务和前缀复用问题的共同起点。[1]
+自回归模型在第 `t` 步要让当前 Query 与全部历史 Key/Value 发生注意力计算。若每一步都重算历史 token 的 K/V 投影，计算会随生成过程反复发生；因此推理系统会把已完成 token 的 K/V 状态保存在 GPU 上，并让下一个 token 直接读取它们。这就是 **KV Cache** 的直接价值，也是长上下文、并发服务和前缀复用问题的共同起点。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
 
 但“已经有 KV Cache”并不意味着系统问题自动消失。缓存首先会因序列长度、并发请求数和模型结构而增长；随后会面临物理显存如何碎片化分配、不同请求能否共享相同前缀、哪些条目值得驻留、以及某项优化是否真的改善 TTFT 的问题。下表给出本文的五层视角。
 
@@ -39,38 +39,36 @@
 
 ### 1.1 一条必须会算的公式
 
-设解码器模型有 $L$ 层、批内有 $B$ 条独立序列、每层有 $H_{kv}$ 个 KV head、每个 head 的维度是 $D$，数据类型每个元素占 $s$ 字节，当前每条序列缓存了 $S$ 个 token。忽略张量对齐、元数据和框架额外开销时，常规 K/V 缓存的容量近似为：
+设解码器模型有 `L` 层、批内有 `B` 条独立序列、每层有 `H_kv` 个 KV head、每个 head 的维度是 `D`，数据类型每个元素占 `s` 字节，当前每条序列缓存了 `S` 个 token。忽略张量对齐、元数据和框架额外开销时，常规 K/V 缓存的容量近似为：
 
-$$
-M_{KV} = 2 \times L \times B \times H_{kv} \times D \times S \times s \quad \text{bytes}.
-$$
+**容量公式：** `M_KV = 2 × L × B × H_kv × D × S × s bytes`
 
-其中的 $2$ 对应 Key 与 Value 两个张量。注意公式使用的是 **KV head 数**，而不是 Query head 数：这正是 GQA/MQA 能直接降低缓存体积的原因。[1]
+其中的 `2` 对应 Key 与 Value 两个张量。注意公式使用的是 **KV head 数**，而不是 Query head 数：这正是 GQA/MQA 能直接降低缓存体积的原因。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
 
 | 变量 | 工程含义 | 增大一倍的直接后果 |
 | --- | --- | --- |
-| $S$ | 已处理的上下文 token 数 | 单请求 KV Cache 近似翻倍 |
-| $B$ | 同时驻留的独立序列数 | 服务总 KV Cache 近似翻倍 |
-| $L$ | Transformer 层数 | 每一层都要多存一份 K/V |
-| $H_{kv}$ | Key/Value 头数 | 每 token 的缓存宽度按比例增大 |
-| $D$ | 每头维度 | 每个 K/V 向量变宽 |
-| $s$ | 数值精度的字节数 | FP32 相对 FP16/BF16 约翻倍 |
+| `S` | 已处理的上下文 token 数 | 单请求 KV Cache 近似翻倍 |
+| `B` | 同时驻留的独立序列数 | 服务总 KV Cache 近似翻倍 |
+| `L` | Transformer 层数 | 每一层都要多存一份 K/V |
+| `H_kv` | Key/Value 头数 | 每 token 的缓存宽度按比例增大 |
+| `D` | 每头维度 | 每个 K/V 向量变宽 |
+| `s` | 数值精度的字节数 | FP32 相对 FP16/BF16 约翻倍 |
 
-例如，令 $L=32$、$H_{kv}=8$、$D=128$、FP16/BF16（$s=2$ bytes）、批大小 $B=8$。此时上下文从 1,024 扩展到 16,384 token，KV Cache 从 **1 GiB** 线性增加到 **16 GiB**。这不是模型参数大小，而是运行时为历史状态支付的显存租金。
+例如，令 `L = 32`、`H_kv = 8`、`D = 128`、FP16/BF16（`s = 2` bytes）、批大小 `B = 8`。此时上下文从 1,024 扩展到 16,384 token，KV Cache 从 **1 GiB** 线性增加到 **16 GiB**。这不是模型参数大小，而是运行时为历史状态支付的显存租金。
 
 ![固定模型形状下的 KV Cache 容量曲线；该图由随附代码精确计算](./assets/05_kv_memory_scaling.png)
 
 ### 1.2 MHA、GQA、MQA：谁在改“每个 token 的缓存宽度”？
 
-如果 Query head 的总数为 $H_q$，则经典 MHA 通常令 $H_{kv}=H_q$；GQA 将多个 Query head 归到一组而共享 K/V；MQA 则让全部 Query head 共用很少的 K/V head。它们会影响 attention 的表示方式，但从**缓存账本**看，最直接的杠杆就是 $H_{kv}$。[1]
+如果 Query head 的总数为 `H_q`，则经典 MHA 通常令 `H_kv = H_q`；GQA 将多个 Query head 归到一组而共享 K/V；MQA 则让全部 Query head 共用很少的 K/V head。它们会影响 attention 的表示方式，但从**缓存账本**看，最直接的杠杆就是 `H_kv`。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
 
 | 注意力形式 | 常见关系 | 相对 MHA 的理论 KV 容量 | 直觉 |
 | --- | --- | ---: | --- |
-| MHA | $H_{kv}=H_q$ | $1\times$ | 每个 Query head 对应一组 K/V |
-| GQA | $1 < H_{kv} < H_q$ | $H_{kv}/H_q$ | 以组为单位共享 K/V，折中表达与容量 |
-| MQA | $H_{kv}$ 很小，极端时为 1 | $1/H_q$ | 最大程度共享 K/V |
+| MHA | `H_kv = H_q` | `1×` | 每个 Query head 对应一组 K/V |
+| GQA | `1 < H_kv < H_q` | `H_kv / H_q` | 以组为单位共享 K/V，折中表达与容量 |
+| MQA | `H_kv` 很小，极端时为 1 | `1 / H_q` | 最大程度共享 K/V |
 
-> **一个常被混淆的边界：** GQA/MQA 是“让每 token 的 K/V 表示变窄”；PagedAttention 是“把既有 K/V 表示如何放进显存、如何按需寻址”的机制。前者直接缩小容量公式，后者主要降低碎片与预留浪费；二者可以叠加。[1] [9]
+> **一个常被混淆的边界：** GQA/MQA 是“让每 token 的 K/V 表示变窄”；PagedAttention 是“把既有 K/V 表示如何放进显存、如何按需寻址”的机制。前者直接缩小容量公式，后者主要降低碎片与预留浪费；二者可以叠加。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb) [9](https://arxiv.org/abs/2309.06180)
 
 ### 1.3 可运行代码：把容量估算写成可审计函数
 
@@ -123,21 +121,19 @@ for tokens in (1024, 2048, 4096, 8192, 16384):
 
 ### 2.1 从预留浪费到块表寻址
 
-静态推理思路常为每个请求按最大可能长度预留一段连续 KV 空间。在线服务中这会很快变得不现实：请求会在不同时间到达、生成不同长度、结束后留下不可用洞；如果为不确定的未来一次性预留足够空间，则大量容量停留在未使用状态。vLLM 的 PagedAttention 以操作系统的分页思想管理 K/V：**逻辑上连续的 token 块，可以映射到物理池中不连续的固定大小 block。**[2] [9]
+静态推理思路常为每个请求按最大可能长度预留一段连续 KV 空间。在线服务中这会很快变得不现实：请求会在不同时间到达、生成不同长度、结束后留下不可用洞；如果为不确定的未来一次性预留足够空间，则大量容量停留在未使用状态。vLLM 的 PagedAttention 以操作系统的分页思想管理 K/V：**逻辑上连续的 token 块，可以映射到物理池中不连续的固定大小 block。**[2](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb) [9](https://arxiv.org/abs/2309.06180)
 
 ![PagedAttention：逻辑块通过块表映射到离散的物理块池](./assets/02_paged_attention_block_table.png)
 
-对于块大小 $P$，长度为 $S$ 的请求需要的块数是：
+对于块大小 `P`，长度为 `S` 的请求需要的块数是：
 
-$$
-N_{blocks} = \left\lceil \frac{S}{P} \right\rceil.
-$$
+**块数量公式：** `N_blocks = ceil(S / P)`
 
-Prefill 时一次性申请这些块；Decode 每生成一个 token 只更新长度，并且**仅在新 token 跨过块边界时**追加一个物理块。一次注意力读取时，内核可根据块表把逻辑块号转换为物理块号，再访问相应的 K/V 数据。vLLM 的官方设计文档特别指出，这里的 KV block 概念与 CUDA thread block 不同；前者是缓存分配单位，后者是 GPU 线程执行单位。[10]
+Prefill 时一次性申请这些块；Decode 每生成一个 token 只更新长度，并且**仅在新 token 跨过块边界时**追加一个物理块。一次注意力读取时，内核可根据块表把逻辑块号转换为物理块号，再访问相应的 K/V 数据。vLLM 的官方设计文档特别指出，这里的 KV block 概念与 CUDA thread block 不同；前者是缓存分配单位，后者是 GPU 线程执行单位。[10](https://docs.vllm.ai/en/latest/design/paged_attention/)
 
 | 对象 | 它是什么 | 它不是什么 |
 | --- | --- | --- |
-| logical block | 一条请求逻辑 token 序列中的第 $i$ 段 | 固定物理地址 |
+| logical block | 一条请求逻辑 token 序列中的第 `i` 段 | 固定物理地址 |
 | physical block | 共享 GPU KV 池中的一个可分配单元 | 某一请求永久独占的连续区间 |
 | block table | `logical_block_id → physical_block_id` 映射 | K/V 数值本身 |
 | tail block | 一个请求最后未填满的块 | 跨请求任意拼接的碎片 |
@@ -231,7 +227,7 @@ pool.release("r1")
 | 静态预留 | 每条请求按 16 token 预留 | 80 | 长度不确定时的明显过度保留 |
 | 固定分页 | 每条按 4-token block 向上取整 | 52 | 仍有尾块浪费，但明显更接近实际需求 |
 
-**我的思考。** 块大小不是“越小越先进”。块过小会增加块表长度、分配器元数据与核函数寻址压力；块过大又会让尾块浪费上升。因此 $P$ 是一个依赖模型、请求长度分布、并发度和内核实现的系统参数，而不是仅根据单请求平均长度决定的常数。[2] [9]
+**我的思考。** 块大小不是“越小越先进”。块过小会增加块表长度、分配器元数据与核函数寻址压力；块过大又会让尾块浪费上升。因此 `P` 是一个依赖模型、请求长度分布、并发度和内核实现的系统参数，而不是仅根据单请求平均长度决定的常数。[2](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb) [9](https://arxiv.org/abs/2309.06180)
 
 ---
 
@@ -241,17 +237,15 @@ pool.release("r1")
 
 PagedAttention 让某条请求的 KV 存储从连续区间变成按块映射，但单独使用它并不自动找出两条请求的公共 prompt。若两个请求都有相同的系统提示词、few-shot 示例或多轮对话历史，理想系统应复用那段已计算过的 K/V，而不是仅仅把两份重复 K/V 放得更整齐。
 
-SGLang 提出的 RadixAttention 将 token 序列作为键、KV Cache 作为值组织在 **radix tree（压缩前缀树）** 中。新 prompt 到来时，系统匹配最长的连续公共前缀；命中的 K/V 直接复用，未命中的后缀才需要 prefill 并被插入为新的分支。其公开技术说明还描述了利用 LRU 驱逐叶节点、并与 paged layout 和 continuous batching 兼容的设计。[3] [11]
+SGLang 提出的 RadixAttention 将 token 序列作为键、KV Cache 作为值组织在 **radix tree（压缩前缀树）** 中。新 prompt 到来时，系统匹配最长的连续公共前缀；命中的 K/V 直接复用，未命中的后缀才需要 prefill 并被插入为新的分支。其公开技术说明还描述了利用 LRU 驱逐叶节点、并与 paged layout 和 continuous batching 兼容的设计。[3](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb) [11](https://www.lmsys.org/blog/2024-01-17-sglang/)
 
 ![RadixAttention：多条请求共用树干上的 K/V，仅为独有后缀扩展分支](./assets/03_radix_attention_reuse.png)
 
-令当前请求为 $x$、树中一条缓存路径为 $c_j$，最长可复用长度可以抽象为：
+令当前请求为 `x`、树中一条缓存路径为 `c_j`，最长可复用长度可以抽象为：
 
-$$
-H(x) = \max_j \mathrm{LCP}(x, c_j),
-$$
+**最长复用前缀：** `H(x) = max_j LCP(x, c_j)`
 
-其中 $\mathrm{LCP}$ 表示最长**公共前缀**的长度。这里的“前缀”有严格含义：中间出现的一段相同 token 不可直接复用，因为该 token 的 K/V 表示依赖此前全部上下文。
+其中 `LCP` 表示最长**公共前缀**的长度。这里的“前缀”有严格含义：中间出现的一段相同 token 不可直接复用，因为该 token 的 K/V 表示依赖此前全部上下文。
 
 ### 3.2 可运行代码：压缩边、分裂与最长前缀匹配
 
@@ -299,7 +293,7 @@ class RadixPrefixCache:
             child, matched = max(
                 ((candidate, self._lcp(candidate.edge_tokens, remainder))
                  for candidate in node.children),
-                key=lambda pair: pair[1],
+                key=lambda pair: pair[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb),
                 default=(None, 0),
             )
             if child is None or matched != len(child.edge_tokens):
@@ -321,7 +315,7 @@ class RadixPrefixCache:
             child, overlap = max(
                 ((candidate, self._lcp(candidate.edge_tokens, remainder))
                  for candidate in node.children),
-                key=lambda pair: pair[1],
+                key=lambda pair: pair[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb),
                 default=(None, 0),
             )
             if child is None or overlap == 0:
@@ -371,7 +365,7 @@ print(resolution.hit_length)   # 4
 
 这段示例中，第一次插入形成一条边 `(1, 2, 3, 4, 5)`；第二次插入在前三个 token 处发生部分重叠，于是树中出现共享边 `(1, 2, 3)`，其子节点分别承载 `(4, 5)` 与 `(9)`。第三次请求可以完整走到 `(9)`，因此只需 prefill token `10`。
 
-> **工程边界。** 教学实现中的树节点只存 token 路由和 `last_used`；真实运行时还要存 KV block 引用、引用计数、GPU/CPU 驻留位置、并发访问保护与节点淘汰规则。把这些附加状态全塞进“最长前缀匹配函数”会使代码难以验证，也会掩盖数据结构与内存管理是两类问题。[3] [11]
+> **工程边界。** 教学实现中的树节点只存 token 路由和 `last_used`；真实运行时还要存 KV block 引用、引用计数、GPU/CPU 驻留位置、并发访问保护与节点淘汰规则。把这些附加状态全塞进“最长前缀匹配函数”会使代码难以验证，也会掩盖数据结构与内存管理是两类问题。[3](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb) [11](https://www.lmsys.org/blog/2024-01-17-sglang/)
 
 ---
 
@@ -381,17 +375,13 @@ print(resolution.hit_length)   # 4
 
 Prefix cache 的输出不应只是一句“hit / miss”，而应是一个可执行拆分：
 
-$$
-\text{prompt} = \underbrace{\text{reused prefix}}_{H\ \text{tokens}} + \underbrace{\text{prefill suffix}}_{S-H\ \text{tokens}}.
-$$
+**请求拆分：** `prompt = reused_prefix (H tokens) + prefill_suffix (S − H tokens)`
 
-命中前缀意味着这些 token 的历史 K/V 已可复用；没有命中的 suffix 仍需模型前向。**Chunked Prefill** 将后者再按大小 $C$ 分割成小任务：
+命中前缀意味着这些 token 的历史 K/V 已可复用；没有命中的 suffix 仍需模型前向。**Chunked Prefill** 将后者再按大小 `C` 分割成小任务：
 
-$$
-\text{chunks} = [\text{suffix}_{0:C},\ \text{suffix}_{C:2C},\ \ldots].
-$$
+**分块计划：** `chunks = [suffix[0:C], suffix[C:2C], …]`
 
-第一项优化的是**重复工作量**，第二项优化的是**工作进入调度器的粒度**。长 prompt 即使完全不命中，也可以分块执行，从而不必一次独占过多 token 预算；而高命中请求即使 suffix 很短，也仍需与活跃 decode 竞争服务资源。[4]
+第一项优化的是**重复工作量**，第二项优化的是**工作进入调度器的粒度**。长 prompt 即使完全不命中，也可以分块执行，从而不必一次独占过多 token 预算；而高命中请求即使 suffix 很短，也仍需与活跃 decode 竞争服务资源。[4](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb)
 
 ![前缀匹配、分块 Prefill、缓存感知调度与指标之间的完整闭环](./assets/04_cache_aware_serving.png)
 
@@ -431,14 +421,14 @@ print(plan)
 
 `chunk_tokens` 接收的是 **miss suffix**，而不是整个 prompt。这一点决定了系统是否真的把复用收益落到执行计划上：若对完整 prompt 分块后再调度，即便缓存命中也可能错误地再次执行前缀。`prefill_plan` 先调用 `resolve_and_store`，因此返回的 `hit_length` 描述的是本次到达时已有的复用状态；随后整个 prompt 被写回树，为未来请求增加潜在命中机会。
 
-| 情形 | 命中长度 $H$ | 需要 prefill 的 token | Chunked Prefill 的意义 |
+| 情形 | 命中长度 `H` | 需要 prefill 的 token | Chunked Prefill 的意义 |
 | --- | ---: | ---: | --- |
-| 完全冷启动 | $0$ | $S$ | 将长 prompt 切成可插队、可限额的执行单元 |
-| 命中系统提示词 | $0 < H < S$ | $S-H$ | 只对独有后缀做分块 prefill |
-| 完整命中 | $H=S$ | $0$ | 通常跳过 prefill，直接进入下一阶段 |
+| 完全冷启动 | `0` | `S` | 将长 prompt 切成可插队、可限额的执行单元 |
+| 命中系统提示词 | `0 < H < S` | `S − H` | 只对独有后缀做分块 prefill |
+| 完整命中 | `H = S` | `0` | 通常跳过 prefill，直接进入下一阶段 |
 | 共享前缀很长但 suffix 也很长 | 较大 | 仍可能较大 | 复用与分块同时必要 |
 
-**我的思考。** “命中率高”不一定代表“TTFT 一定低”。如果被命中的前缀很短，或者 cache hit 请求仍长期在队列中等待，其端到端收益会被稀释。比请求级 hit rate 更能解释收益的是**加权复用 token 数**（例如 $\sum_i H_i$）、复用前后真实 prefill token 数，以及相同到达负载下的 TTFT 分位数。[4] [6]
+**我的思考。** “命中率高”不一定代表“TTFT 一定低”。如果被命中的前缀很短，或者 cache hit 请求仍长期在队列中等待，其端到端收益会被稀释。比请求级 hit rate 更能解释收益的是**加权复用 token 数**（例如 `sum_i H_i`）、复用前后真实 prefill token 数，以及相同到达负载下的 TTFT 分位数。[4](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb) [6](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb)
 
 ---
 
@@ -446,16 +436,13 @@ print(plan)
 
 ### 5.1 为什么 LRU 本身不够？
 
-一段高频复用、体积很小的系统提示词，通常比一段很大但只被访问过一次的 RAG 上下文更值得保留。LRU 只看最近访问时间，LFU 只看累计频率；KV Cache 的驻留决策还需要面对**容量成本**，以及正在被运行中请求引用的块不能随意回收这一安全约束。教程中的缓存调度练习以命中次数、最近使用时间和条目大小构造可解释的优先级；SGLang 的公开说明也描述了 radix tree 上的 LRU 叶节点驱逐与 cache-aware scheduling。[5] [11]
+一段高频复用、体积很小的系统提示词，通常比一段很大但只被访问过一次的 RAG 上下文更值得保留。LRU 只看最近访问时间，LFU 只看累计频率；KV Cache 的驻留决策还需要面对**容量成本**，以及正在被运行中请求引用的块不能随意回收这一安全约束。教程中的缓存调度练习以命中次数、最近使用时间和条目大小构造可解释的优先级；SGLang 的公开说明也描述了 radix tree 上的 LRU 叶节点驱逐与 cache-aware scheduling。[5](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb) [11](https://www.lmsys.org/blog/2024-01-17-sglang/)
 
 可把“保留价值”写成一个教学用而非唯一正确的分数：
 
-$$
-V(e)=0.70\frac{\log(1+\mathrm{hits}(e))}{\mathrm{blocks}(e)}+
-0.25\frac{1}{1+\mathrm{age}(e)}+0.05\,\mathrm{active\_references}(e).
-$$
+**保留价值：** `V(e) = 0.70 × log(1 + hits(e)) / blocks(e) + 0.25 / (1 + age(e)) + 0.05 × active_references(e)`
 
-该公式的第一项偏好每块能带来更多重用的条目，第二项保留近期热点，第三项使活跃引用条目更难被逐出。生产策略还可能加入租户配额、优先级、预测长度、请求 deadline 与多级存储，但所有策略都应当说明自己在交换哪一种收益。[5]
+该公式的第一项偏好每块能带来更多重用的条目，第二项保留近期热点，第三项使活跃引用条目更难被逐出。生产策略还可能加入租户配额、优先级、预测长度、请求 deadline 与多级存储，但所有策略都应当说明自己在交换哪一种收益。[5](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb)
 
 ### 5.2 可运行代码：价值评分、懒删除与引用保护
 
@@ -554,9 +541,9 @@ class CacheValueScheduler:
 
 ### 6.1 先声明“什么没有被测量”
 
-缓存基准最容易犯的错误，是把一个高 hit rate 当作性能结论。正确比较必须固定模型、精度、最大上下文、请求到达过程、prompt 复用模式、并发度、生成长度、预热状态和缓存策略；然后同时报告命中、重算量、TTFT、TPOT、吞吐、显存水位与驱逐代价。DataWhale 的项目型教程也将目标明确为以统一口径比较 hit rate、TTFT、维护开销，并给出 accept/tune/reject 的部署决策。[6]
+缓存基准最容易犯的错误，是把一个高 hit rate 当作性能结论。正确比较必须固定模型、精度、最大上下文、请求到达过程、prompt 复用模式、并发度、生成长度、预热状态和缓存策略；然后同时报告命中、重算量、TTFT、TPOT、吞吐、显存水位与驱逐代价。DataWhale 的项目型教程也将目标明确为以统一口径比较 hit rate、TTFT、维护开销，并给出 accept/tune/reject 的部署决策。[6](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb)
 
-本文随附的基准部分是一个**确定性的玩具 TTFT 账本**，目的是验证指标关系而不是声称任何真实框架的速度。它对每条请求明确设置固定调度开销、每 token 的 prefill 成本和 cache lookup 成本；这使图中每一毫秒的变化都能追溯到“少算了几个 token”。要报告 vLLM/SGLang 的真实性能，应将相同的工作负载驱动到真实服务端，并记录服务版本、GPU、启动参数与原始结果文件。[6] [9] [11]
+本文随附的基准部分是一个**确定性的玩具 TTFT 账本**，目的是验证指标关系而不是声称任何真实框架的速度。它对每条请求明确设置固定调度开销、每 token 的 prefill 成本和 cache lookup 成本；这使图中每一毫秒的变化都能追溯到“少算了几个 token”。要报告 vLLM/SGLang 的真实性能，应将相同的工作负载驱动到真实服务端，并记录服务版本、GPU、启动参数与原始结果文件。[6](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb) [9](https://arxiv.org/abs/2309.06180) [11](https://www.lmsys.org/blog/2024-01-17-sglang/)
 
 ### 6.2 可运行代码：可追溯的玩具工作负载与决策函数
 
@@ -668,11 +655,11 @@ def decide_prefix_cache(
 
 ## 7. 将六个主题串成一条设计链
 
-这六份教程不是六个互不相干的名词。它们从容量约束出发，逐步把“一个请求”的 KV Cache 扩展为“一个服务”的共享、执行与治理问题。[1] [2] [3] [4] [5] [6]
+这六份教程不是六个互不相干的名词。它们从容量约束出发，逐步把“一个请求”的 KV Cache 扩展为“一个服务”的共享、执行与治理问题。[1](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb) [2](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb) [3](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb) [4](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb) [5](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb) [6](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb)
 
 | 如果你看到的症状 | 先用哪一层解释 | 可能的下一步 | 不应直接得出的结论 |
 | --- | --- | --- | --- |
-| 长上下文一来就 OOM | 容量公式、$H_{kv}$、并发上限 | GQA/MQA、KV 量化/压缩、分页与准入控制 | “换 PagedAttention 就一定少一半 bytes” |
+| 长上下文一来就 OOM | 容量公式、`H_kv`、并发上限 | GQA/MQA、KV 量化/压缩、分页与准入控制 | “换 PagedAttention 就一定少一半 bytes” |
 | 显存看似足够却无法稳定接纳请求 | 物理布局与碎片 | block pool、按需分配、请求结束及时释放 | “CPU 端树索引能解决 GPU block 不足” |
 | 多轮聊天 / Agent TTFT 偏高 | 最长前缀命中与重复 prefill | radix/prefix cache、工作负载聚类 | “所有相似文本都能复用” |
 | 长 RAG prompt 令在线对话卡顿 | 执行粒度与 token 预算 | chunked prefill、decode 优先、连续批处理 | “拆 chunk 自动减少总 FLOPs” |
@@ -687,7 +674,7 @@ def decide_prefix_cache(
 
 | 练习 | 验收标准 | 你会验证的核心概念 |
 | --- | --- | --- |
-| 容量敏感性表 | 固定 $L,D,s$，分别扫描 $S,B,H_{kv}$；每次只改变一个变量 | 线性容量账本与 GQA/MQA 杠杆 |
+| 容量敏感性表 | 固定 `L, D, s`，分别扫描 `S, B, H_kv`；每次只改变一个变量 | 线性容量账本与 GQA/MQA 杠杆 |
 | PagedKVPool 边界测试 | 对 `S=P`、`S=P+1`、总块恰好耗尽、请求释放后重用分别断言 | 跨块分配、OOM、释放不变量 |
 | Radix 插入可视化 | 依次插入两条部分重叠路径，打印所有叶子路由 | 压缩边分裂与最长连续前缀 |
 | 命中加权指标 | 除 hit rate 外，报告 `sum(hit_length)` 和重算 token 减少量 | 避免将短命中与长命中等权混合 |
@@ -731,18 +718,14 @@ python3 kv_cache_lab.py
 
 ## 参考资料
 
-[1]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb "DataWhale：KV Cache 与显存增长"
-[2]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb "DataWhale：vLLM PagedAttention"
-[3]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb "DataWhale：SGLang RadixAttention"
-[4]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb "DataWhale：Prefix Caching 与 Chunked Prefill"
-[5]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb "DataWhale：KV Cache Scheduling"
-[6]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb "DataWhale：Prefix Caching Benchmark"
-[7]: https://datawhale.cn/ "DataWhale 社区"
-[8]: https://datawhalechina.github.io/llm-algo-leetcode/ "llm-algo-leetcode 在线阅读站"
-[9]: https://arxiv.org/abs/2309.06180 "Kwon et al., Efficient Memory Management for Large Language Model Serving with PagedAttention, SOSP 2023"
-[10]: https://docs.vllm.ai/en/latest/design/paged_attention/ "vLLM 官方设计文档：Paged Attention"
-[11]: https://www.lmsys.org/blog/2024-01-17-sglang/ "SGLang：Fast and Expressive LLM Inference with RadixAttention and SGLang"
-
----
-
-<p align="center">由 <strong>Manus AI</strong> 整理与撰写。最后更新：2026-08-27。</p>
+1. [DataWhale：KV Cache 与显存增长](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/01_Hardware_Math_and_Systems/11_KV_Cache_and_Memory_Growth.ipynb)
+2. [DataWhale：vLLM PagedAttention](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb)
+3. [DataWhale：SGLang RadixAttention](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/24_SGLang_RadixAttention.ipynb)
+4. [DataWhale：Prefix Caching 与 Chunked Prefill](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/34_Prefix_Caching_and_Chunked_Prefill.ipynb)
+5. [DataWhale：KV Cache Scheduling](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/37_KV_Cache_Scheduling.ipynb)
+6. [DataWhale：Prefix Caching Benchmark](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/69_Prefix_Caching_Benchmark.ipynb)
+7. [DataWhale 社区](https://datawhale.cn/)
+8. [llm-algo-leetcode 在线阅读站](https://datawhalechina.github.io/llm-algo-leetcode/)
+9. [Kwon et al.：Efficient Memory Management for Large Language Model Serving with PagedAttention（SOSP 2023）](https://arxiv.org/abs/2309.06180)
+10. [vLLM 官方设计文档：Paged Attention](https://docs.vllm.ai/en/latest/design/paged_attention/)
+11. [SGLang 技术文章：Fast and Expressive LLM Inference with RadixAttention and SGLang](https://www.lmsys.org/blog/2024-01-17-sglang/)
