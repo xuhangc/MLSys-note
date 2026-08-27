@@ -83,15 +83,15 @@ vLLM 的自动前缀缓存文档也明确区分了这一边界：共享前缀只
 
 ### 2.2 一个足以指导容量估算的 KV Cache 账本
 
-对常见 decoder-only Transformer，若每个 token 在每一层保存 K 和 V，单请求的 KV 数据量可按下式估算：
+对常见 decoder-only Transformer，若每个 token 在每一层保存 K 和 V，单请求的 KV 数据量可按下列容量账本估算。这里使用代码式变量名，而不是依赖渲染器可能不兼容的 LaTeX 宏：
 
-$$
-M_{\mathrm{KV}} = 2 \times L \times T \times n_{\mathrm{kv}} \times d_{\mathrm{head}} \times b.
-$$
+```text
+kv_cache_bytes = 2 * num_layers * context_tokens * num_kv_heads * head_dim * bytes_per_element
+```
 
-其中，$L$ 是层数，$T$ 是目前上下文 token 数，$n_{\mathrm{kv}}$ 是 KV heads 数，$d_{\mathrm{head}}$ 是每头维度，$b$ 是每个元素的字节数，而前面的 $2$ 对应 K 与 V。MHA 通常使 $n_{\mathrm{kv}}$ 等于 attention heads；GQA/MQA 通过减少 KV heads 降低这部分成本。这个式子只是张量体积账本，实际显存还会受到页尾空位、元数据、CUDA graph、工作区与分配器状态影响。
+其中，`num_layers` 是层数，`context_tokens` 是当前上下文 token 数，`num_kv_heads` 是 KV heads 数，`head_dim` 是每头维度，`bytes_per_element` 是每个元素的字节数，而前面的 `2` 对应 K 与 V。MHA 通常使 `num_kv_heads` 等于 attention heads；GQA/MQA 通过减少 KV heads 降低这部分成本。这个式子只是张量体积账本，实际显存还会受到页尾空位、元数据、CUDA graph、工作区与分配器状态影响。
 
-例如，假定 FP16、$L=32$、$n_{\mathrm{kv}}=8$、$d_{\mathrm{head}}=128$，一条达到 $4096$ token 的请求仅 KV 数据就约为 **512 MiB**。这不是某个真实模型的 benchmark，而是由上式进行的容量演算；它解释了为何少量长上下文并发请求就可能让服务系统首先受到显存约束。
+例如，假定 FP16、`num_layers=32`、`num_kv_heads=8`、`head_dim=128`，一条达到 `4096` token 的请求仅 KV 数据就约为 **512 MiB**。这不是某个真实模型的 benchmark，而是由上式进行的容量演算；它解释了为何少量长上下文并发请求就可能让服务系统首先受到显存约束。
 
 > **不要忽略“随时间增长”**：权重加载后相对稳定，而 KV Cache 会随活跃请求及每条请求的上下文持续增长与释放。服务端的难点因此是一个在线资源分配问题，而不是启动时做一次静态显存规划。
 
@@ -107,35 +107,33 @@ vLLM 的原始论文将这种动态增长、收缩且容易碎片化的 KV Cache
 
 最朴素的实现会把一条请求的 KV Cache 当作一段连续大数组，并按最大可能生成长度提前预留空间。它的优点是寻址简单，代价却是容量浪费：请求实际结束得早，尾部空间便永久闲置直到释放。更糟的是，许多不同长度的请求交错到达、结束时，连续大块的分配与回收容易导致难以利用的间隙。
 
-PagedAttention 采用不同视角：物理池被切成固定 token 容量的 `block`；每个请求维护自己的 `block_table`，使逻辑块编号映射到任意物理块编号。于是第 $p$ 个逻辑 token 的定位由三步构成：
+PagedAttention 采用不同视角：物理池被切成固定 token 容量的 `block`；每个请求维护自己的 `block_table`，使逻辑块编号映射到任意物理块编号。于是第 `token_position` 个逻辑 token 的定位由三步构成：
 
-$$
-\ell = \left\lfloor\frac{p}{B}\right\rfloor,
-\qquad
-r = p \bmod B,
-\qquad
-\text{physical\_block}=\text{block\_table}[\ell],
-$$
+```text
+logical_page  = floor(token_position / tokens_per_block)
+page_offset   = token_position mod tokens_per_block
+physical_page = block_table[logical_page]
+```
 
-其中 $B$ 是每页容纳的 token 数，$\ell$ 是逻辑页号，$r$ 是页内偏移。注意力内核沿 `block_table` 读取离散的物理 K/V 页，但对模型语义而言上下文仍是原来的逻辑 token 顺序。vLLM 文档也提醒这里的 block 是 KV cache block，不能和 CUDA 的 GPU thread block 混为一谈。[6]
+其中，`tokens_per_block` 是每页容纳的 token 数，`logical_page` 是逻辑页号，`page_offset` 是页内偏移。注意力内核沿 `block_table` 读取离散的物理 K/V 页，但对模型语义而言上下文仍是原来的逻辑 token 顺序。vLLM 文档也提醒这里的 block 是 KV cache block，不能和 CUDA 的 GPU thread block 混为一谈。[6]
 
 | 问题 | 连续预留式 KV Cache | 分页 KV Cache |
 |---|---|---|
 | 不知道最终输出长度 | 倾向按上界预留 | 首次 prefill 按当前长度分配，decode 越界时追加页 |
 | 请求结束后 | 释放整段连续区 | 回收请求持有的页，放回全局空闲页池 |
 | 逻辑连续性 | 依赖物理地址连续 | 由 block table 显式维持 |
-| 尾部浪费 | 可能接近“预留上界 - 实际长度” | 单请求尾页至多浪费 $B-1$ 个 token 槽位 |
+| 尾部浪费 | 可能接近“预留上界 - 实际长度” | 单请求尾页至多浪费 `tokens_per_block - 1` 个 token 槽位 |
 | 前缀共享 | 需要额外机制 | 可作为页的共享/引用计数基础，但并非自动发生 |
 
 ### 3.2 prefill 与 decode 的页分配条件
 
-假设一条请求已有 $T$ 个 token，并且已持有 $N$ 个页。prefill 需要的页数为：
+假设一条请求已有 `context_tokens` 个 token，并且已持有 `allocated_pages` 个页。prefill 需要的页数为：
 
-$$
-N_{\mathrm{prefill}}=\left\lceil\frac{T}{B}\right\rceil.
-$$
+```text
+prefill_pages = ceil(context_tokens / tokens_per_block)
+```
 
-decode 追加一个 token 之前，如果 $T=N\cdot B$，代表现有页已经正好写满，必须先申请新页；否则只在末页写入一个新位置。将 token 长度先加一的写法中，同一条件可写为 $(T+1)\bmod B=1$。两个形式只是检查时点不同，**不要同时使用、不要产生双重分配**。
+decode 追加一个 token 之前，如果 `context_tokens == allocated_pages * tokens_per_block`，代表现有页已经正好写满，必须先申请新页；否则只在末页写入一个新位置。将 token 长度先加一的写法中，同一条件可写为 `(context_tokens + 1) mod tokens_per_block == 1`。两个形式只是检查时点不同，**不要同时使用、不要产生双重分配**。
 
 下面展示实验室中最核心的原创实现。真实系统会写入每层 K/V 张量并维护引用计数；为了让映射可观察，教学代码只把整数 token 写进页槽。
 
@@ -183,13 +181,13 @@ class PagedKVPool:
 
 ### 4.1 复用的必要条件是“从开头一致”，不是“中间碰巧相同”
 
-对新 prompt $P$ 和已缓存路径集合 $\mathcal{C}$，可复用长度是：
+对新 prompt `prompt` 和已缓存路径集合 `cache_paths`，可复用长度是：
 
-$$
-H(P)=\max_{C\in\mathcal{C}} \operatorname{LCP}(P,C),
-$$
+```text
+reusable_tokens(prompt) = max(lcp(prompt, cached_path) for cached_path in cache_paths)
+```
 
-其中 `LCP` 表示最长公共**前缀**。如果 $P=[1,2,3,9,42]$，缓存路径为 $C=[1,2,3,9]$，那么 $H=4$；前四个 token 的 K/V 状态可直接接上，后缀 $[42]$ 仍需要 prefill。若两段 token 只在中部相同，却在开头分歧，则前面的隐藏状态已经不同，不能把那个中间片段视作通用前缀缓存。
+其中 `lcp` 表示最长公共**前缀**。如果 `prompt=[1,2,3,9,42]`，缓存路径为 `cached_path=[1,2,3,9]`，那么 `reusable_tokens=4`；前四个 token 的 K/V 状态可直接接上，后缀 `[42]` 仍需要 prefill。若两段 token 只在中部相同，却在开头分歧，则前面的隐藏状态已经不同，不能把那个中间片段视作通用前缀缓存。
 
 SGLang 的 RadixAttention 将 token 序列作为 key、将对应 KV tensors 作为 value，并使用 radix tree 支持前缀查找、插入和淘汰。[8] Radix tree 与普通 trie 的关键区别是：一条边能够携带**一段** token，而不是只放一个 token；这减少了长公共路径上大量单节点的管理成本。
 
@@ -244,31 +242,32 @@ tail = tail[shared:]
 
 ### 5.1 从 `hit_length` 到“还剩多少模型工作”
 
-令 prompt 总长为 $|P|$，最长可复用前缀为 $H$，则仍需 prefill 的后缀长度为：
+令 prompt 总长为 `prompt_tokens`，最长可复用前缀为 `hit_tokens`，则仍需 prefill 的后缀长度为：
 
-$$
-|S| = |P| - H.
-$$
+```text
+suffix_tokens = prompt_tokens - hit_tokens
+```
 
 这个式子非常朴素，却是缓存指标与服务执行之间的桥梁。只统计“请求是否命中”会掩盖命中质量：命中 1 个 token 和命中 3,000 个 token 都会被算作一次 hit，但节省的计算完全不同。更实用的系统指标是**token 加权前缀命中率**：
 
-$$
-\mathrm{TokenHitRate}=\frac{\sum_i H_i}{\sum_i |P_i|},
-$$
+```text
+token_weighted_hit_rate = sum(hit_tokens_i) / sum(prompt_tokens_i)
+```
 
-以及 `saved_prefill_tokens = ΣH_i`。前者说明全局可少算的 prompt token 比例，后者便于直接估算某个工作负载的潜在 prefill 降量。二者仍不能直接等价为端到端延迟收益，因为 decode、排队、调度和硬件饱和也在影响结果。
+以及 `saved_prefill_tokens = sum(hit_tokens_i)`。前者说明全局可少算的 prompt token 比例，后者便于直接估算某个工作负载的潜在 prefill 降量。二者仍不能直接等价为端到端延迟收益，因为 decode、排队、调度和硬件饱和也在影响结果。
 
-vLLM 的 APC 文档给出的典型受益场景正是重复查询同一长文档，以及在同一会话中反复带上历史上下文；这两种模式本质上都在提高 $H$ 的期望值。[9]
+vLLM 的 APC 文档给出的典型受益场景正是重复查询同一长文档，以及在同一会话中反复带上历史上下文；这两种模式本质上都在提高 `hit_tokens` 的期望值。[9]
 
 ### 5.2 分块预填充处理的是“何时算”，而不是“算不算”
 
-prefix caching 的任务是减少 $|S|$；chunked prefill 的任务是将剩余的 $S$ 改写为更细的服务工作项：
+prefix caching 的任务是减少 `suffix_tokens`；chunked prefill 的任务是将剩余后缀改写为更细的服务工作项：
 
-$$
-S = \operatorname{concat}(c_1, c_2, \dots, c_m), \qquad |c_j|\le C.
-$$
+```text
+suffix_tokens = concatenate(chunk_1, chunk_2, ..., chunk_m)
+len(chunk_j) <= chunk_size
+```
 
-$C$ 是每个 chunk 的最大 token 数。长 request 的后缀不会在一个调度周期独占所有预算，而能与正在 decode 的请求穿插。vLLM 的性能文档将 chunked prefill 描述为：把大型 prefill 切成较小片段，并与 decode 请求一同组成 batch；文档还说明 `max_num_batched_tokens` 是 TTFT、ITL 和吞吐之间需要调节的预算旋钮。[10]
+`chunk_size` 是每个 chunk 的最大 token 数。长 request 的后缀不会在一个调度周期独占所有预算，而能与正在 decode 的请求穿插。vLLM 的性能文档将 chunked prefill 描述为：把大型 prefill 切成较小片段，并与 decode 请求一同组成 batch；文档还说明 `max_num_batched_tokens` 是 TTFT、ITL 和吞吐之间需要调节的预算旋钮。[10]
 
 ![分块 prefill 与 cache scheduling：长后缀被切分、decode 优先进入预算、缓存条目按价值保留](./assets/03_chunked_prefill_scheduler_concept.png)
 
@@ -313,11 +312,11 @@ def schedule_one_iteration(pending_decode_ids, pending_prefills, token_budget):
 
 本文的教学实现给每个条目定义一个**明确标注为启发式、并非工业固定公式**的保留分数：
 
-$$
-\mathrm{score}(x)=\log_2(1+\mathrm{hits}_x)
-+0.75\cdot\frac{1}{1+\mathrm{age}_x}
--0.50\cdot\frac{\mathrm{blocks}_x}{\mathrm{capacity}}.
-$$
+```text
+retention_score = log2(1 + hits)
+                + 0.75 * (1 / (1 + age))
+                - 0.50 * (blocks / capacity)
+```
 
 对数命中项避免极端历史热点无限碾压新数据；recency 项表达热路径偏好；size 项则显式承认大条目有更高的机会成本。真实系统的策略还可能纳入用户等级、deadline、预测重用、跨设备迁移成本与请求取消率。SGLang 的早期说明采用 LRU eviction，并配合 cache-aware scheduling 提升命中率；本文分数只用于演示“复用、时间、容量成本同时参与决策”的思想。[8]
 
@@ -529,7 +528,6 @@ assert [chunk.tokens for chunk in plan.prefill_chunks] == [(42, 43)]
 
 ---
 
-**作者**：Manus AI<br>
 **学习笔记性质**：基于 Datawhale 教程的原创梳理与可运行重构；示例代码用于解释核心不变量，不替代生产推理引擎的实现、基准或安全审计。
 
 [1]: https://github.com/datawhalechina/llm-algo-leetcode/blob/main/02_PyTorch_Algorithms/22_vLLM_PagedAttention.ipynb
