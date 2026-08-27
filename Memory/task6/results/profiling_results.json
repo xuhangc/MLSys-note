@@ -1,0 +1,440 @@
+{
+  "provenance": "controlled CPU teaching laboratory; no GPU profiler or allocator data were collected",
+  "contract": {
+    "model_id": "teaching-transformer-step/v1",
+    "phase": "training-step",
+    "batch_size": 8,
+    "sequence_length": 512,
+    "tokens_per_step": 4096,
+    "device": "cpu-first controlled lab",
+    "backend": "python time.perf_counter",
+    "dtype": "teaching-proxy",
+    "warmup_steps": 3,
+    "measurement_steps": 28,
+    "quality_checksum": 914731,
+    "max_p95_regression_pct": 3.0
+  },
+  "baseline": {
+    "summary": {
+      "config": "baseline",
+      "optimization": "none",
+      "changed_knob": "baseline",
+      "mean_step_ms": 23.37773557142857,
+      "median_step_ms": 23.3482205,
+      "p95_step_ms": 23.5830899,
+      "std_step_ms": 0.11446196474388604,
+      "throughput_tokens_per_s": 175209.44179922988,
+      "declared_working_set_mb": 6100,
+      "quality_checksum": 914731,
+      "quality_passed": true,
+      "stage_mean_ms": {
+        "data_wait": 4.558170785714286,
+        "h2d_copy": 2.3513330000000003,
+        "forward": 4.859365607142856,
+        "backward": 6.667443428571429,
+        "optimizer": 2.240242392857143,
+        "host_sync": 2.65249475
+      },
+      "stage_share_pct": {
+        "data_wait": 19.538604412491544,
+        "h2d_copy": 10.07899165889584,
+        "forward": 20.829676367370407,
+        "backward": 28.580004066940457,
+        "optimizer": 9.60280164124435,
+        "host_sync": 11.369921853057393
+      }
+    },
+    "bottleneck": {
+      "category": "compute",
+      "primary_stage": "backward",
+      "share_pct": 28.580004066940457,
+      "evidence": "backward has the largest measured mean stage time (6.667 ms; 28.6% of summed stages).",
+      "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+      "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+    }
+  },
+  "experiments": [
+    {
+      "baseline_summary": {
+        "config": "baseline",
+        "optimization": "none",
+        "changed_knob": "baseline",
+        "mean_step_ms": 23.37773557142857,
+        "median_step_ms": 23.3482205,
+        "p95_step_ms": 23.5830899,
+        "std_step_ms": 0.11446196474388604,
+        "throughput_tokens_per_s": 175209.44179922988,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.558170785714286,
+          "h2d_copy": 2.3513330000000003,
+          "forward": 4.859365607142856,
+          "backward": 6.667443428571429,
+          "optimizer": 2.240242392857143,
+          "host_sync": 2.65249475
+        },
+        "stage_share_pct": {
+          "data_wait": 19.538604412491544,
+          "h2d_copy": 10.07899165889584,
+          "forward": 20.829676367370407,
+          "backward": 28.580004066940457,
+          "optimizer": 9.60280164124435,
+          "host_sync": 11.369921853057393
+        }
+      },
+      "baseline_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 28.580004066940457,
+        "evidence": "backward has the largest measured mean stage time (6.667 ms; 28.6% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "tuned_summary": {
+        "config": "data_prefetch",
+        "optimization": "asynchronous input prefetch",
+        "changed_knob": "data_wait.target_ms",
+        "mean_step_ms": 20.76056028571429,
+        "median_step_ms": 20.753881,
+        "p95_step_ms": 20.94681915,
+        "std_step_ms": 0.1222529166639673,
+        "throughput_tokens_per_s": 197297.1800196804,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 1.95142675,
+          "h2d_copy": 2.346266392857143,
+          "forward": 4.8608195,
+          "backward": 6.65402475,
+          "optimizer": 2.254037428571429,
+          "host_sync": 2.6489941071428573
+        },
+        "stage_share_pct": {
+          "data_wait": 9.420097303282574,
+          "h2d_copy": 11.326101643393022,
+          "forward": 23.464571582660405,
+          "backward": 32.1208882698008,
+          "optimizer": 10.880885947875678,
+          "host_sync": 12.787455252987519
+        }
+      },
+      "tuned_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 32.1208882698008,
+        "evidence": "backward has the largest measured mean stage time (6.654 ms; 32.1% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "comparison": {
+        "mean_step_delta_ms": 2.6171752857142785,
+        "mean_step_gain_pct": 11.195161643084441,
+        "p95_delta_ms": 2.6362707500000013,
+        "p95_gain_pct": 11.17864860448164,
+        "working_set_delta_mb": 0,
+        "throughput_delta_tokens_per_s": 22087.738220450527,
+        "throughput_gain_pct": 12.606477135952845,
+        "time_improved": true,
+        "p95_improved": true,
+        "memory_improved": false,
+        "throughput_improved": true
+      },
+      "decision": {
+        "decision": "accept",
+        "reason": "mean latency and throughput both clear the 8% gate while quality and P95 pass",
+        "next_action": "repeat on the real target workload with a production profiler"
+      },
+      "contract_match": true
+    },
+    {
+      "baseline_summary": {
+        "config": "baseline",
+        "optimization": "none",
+        "changed_knob": "baseline",
+        "mean_step_ms": 23.37773557142857,
+        "median_step_ms": 23.3482205,
+        "p95_step_ms": 23.5830899,
+        "std_step_ms": 0.11446196474388604,
+        "throughput_tokens_per_s": 175209.44179922988,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.558170785714286,
+          "h2d_copy": 2.3513330000000003,
+          "forward": 4.859365607142856,
+          "backward": 6.667443428571429,
+          "optimizer": 2.240242392857143,
+          "host_sync": 2.65249475
+        },
+        "stage_share_pct": {
+          "data_wait": 19.538604412491544,
+          "h2d_copy": 10.07899165889584,
+          "forward": 20.829676367370407,
+          "backward": 28.580004066940457,
+          "optimizer": 9.60280164124435,
+          "host_sync": 11.369921853057393
+        }
+      },
+      "baseline_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 28.580004066940457,
+        "evidence": "backward has the largest measured mean stage time (6.667 ms; 28.6% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "tuned_summary": {
+        "config": "kernel_fusion",
+        "optimization": "fuse backward pointwise operations",
+        "changed_knob": "backward.target_ms",
+        "mean_step_ms": 20.9190075,
+        "median_step_ms": 20.9313305,
+        "p95_step_ms": 21.09637455,
+        "std_step_ms": 0.11044636541989176,
+        "throughput_tokens_per_s": 195802.7884449107,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.540729499999999,
+          "h2d_copy": 2.349863107142857,
+          "forward": 4.840935178571428,
+          "backward": 4.244601785714286,
+          "optimizer": 2.2454009285714287,
+          "host_sync": 2.6529078214285713
+        },
+        "stage_share_pct": {
+          "data_wait": 21.752582896272383,
+          "h2d_copy": 11.257132148703683,
+          "forward": 23.19073262729175,
+          "backward": 20.333968849149855,
+          "optimizer": 10.756701061826519,
+          "host_sync": 12.708882416755806
+        }
+      },
+      "tuned_bottleneck": {
+        "category": "compute",
+        "primary_stage": "forward",
+        "share_pct": 23.19073262729175,
+        "evidence": "forward has the largest measured mean stage time (4.841 ms; 23.2% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "comparison": {
+        "mean_step_delta_ms": 2.4587280714285704,
+        "mean_step_gain_pct": 10.517391917263106,
+        "p95_delta_ms": 2.4867153500000008,
+        "p95_gain_pct": 10.54448488533303,
+        "working_set_delta_mb": 0,
+        "throughput_delta_tokens_per_s": 20593.34664568081,
+        "throughput_gain_pct": 11.753559873376258,
+        "time_improved": true,
+        "p95_improved": true,
+        "memory_improved": false,
+        "throughput_improved": true
+      },
+      "decision": {
+        "decision": "accept",
+        "reason": "mean latency and throughput both clear the 8% gate while quality and P95 pass",
+        "next_action": "repeat on the real target workload with a production profiler"
+      },
+      "contract_match": true
+    },
+    {
+      "baseline_summary": {
+        "config": "baseline",
+        "optimization": "none",
+        "changed_knob": "baseline",
+        "mean_step_ms": 23.37773557142857,
+        "median_step_ms": 23.3482205,
+        "p95_step_ms": 23.5830899,
+        "std_step_ms": 0.11446196474388604,
+        "throughput_tokens_per_s": 175209.44179922988,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.558170785714286,
+          "h2d_copy": 2.3513330000000003,
+          "forward": 4.859365607142856,
+          "backward": 6.667443428571429,
+          "optimizer": 2.240242392857143,
+          "host_sync": 2.65249475
+        },
+        "stage_share_pct": {
+          "data_wait": 19.538604412491544,
+          "h2d_copy": 10.07899165889584,
+          "forward": 20.829676367370407,
+          "backward": 28.580004066940457,
+          "optimizer": 9.60280164124435,
+          "host_sync": 11.369921853057393
+        }
+      },
+      "baseline_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 28.580004066940457,
+        "evidence": "backward has the largest measured mean stage time (6.667 ms; 28.6% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "tuned_summary": {
+        "config": "defer_scalar_sync",
+        "optimization": "defer host scalar synchronization",
+        "changed_knob": "host_sync.target_ms",
+        "mean_step_ms": 21.23238489285714,
+        "median_step_ms": 21.2506975,
+        "p95_step_ms": 21.38177775,
+        "std_step_ms": 0.1151665873368223,
+        "throughput_tokens_per_s": 192912.8555585835,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.551336892857143,
+          "h2d_copy": 2.350755714285714,
+          "forward": 4.8483579642857135,
+          "backward": 6.65148592857143,
+          "optimizer": 2.2505928928571426,
+          "host_sync": 0.5368175714285714
+        },
+        "stage_share_pct": {
+          "data_wait": 21.479363665753098,
+          "h2d_copy": 11.094045126769942,
+          "forward": 22.881110835824902,
+          "backward": 31.390707508741993,
+          "optimizer": 10.621341453563806,
+          "host_sync": 2.533431409346255
+        }
+      },
+      "tuned_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 31.390707508741993,
+        "evidence": "backward has the largest measured mean stage time (6.651 ms; 31.4% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "comparison": {
+        "mean_step_delta_ms": 2.145350678571429,
+        "mean_step_gain_pct": 9.176896847072733,
+        "p95_delta_ms": 2.2013121499999997,
+        "p95_gain_pct": 9.334282145954079,
+        "working_set_delta_mb": 0,
+        "throughput_delta_tokens_per_s": 17703.41375935363,
+        "throughput_gain_pct": 10.104143690863264,
+        "time_improved": true,
+        "p95_improved": true,
+        "memory_improved": false,
+        "throughput_improved": true
+      },
+      "decision": {
+        "decision": "accept",
+        "reason": "mean latency and throughput both clear the 8% gate while quality and P95 pass",
+        "next_action": "repeat on the real target workload with a production profiler"
+      },
+      "contract_match": true
+    },
+    {
+      "baseline_summary": {
+        "config": "baseline",
+        "optimization": "none",
+        "changed_knob": "baseline",
+        "mean_step_ms": 23.37773557142857,
+        "median_step_ms": 23.3482205,
+        "p95_step_ms": 23.5830899,
+        "std_step_ms": 0.11446196474388604,
+        "throughput_tokens_per_s": 175209.44179922988,
+        "declared_working_set_mb": 6100,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.558170785714286,
+          "h2d_copy": 2.3513330000000003,
+          "forward": 4.859365607142856,
+          "backward": 6.667443428571429,
+          "optimizer": 2.240242392857143,
+          "host_sync": 2.65249475
+        },
+        "stage_share_pct": {
+          "data_wait": 19.538604412491544,
+          "h2d_copy": 10.07899165889584,
+          "forward": 20.829676367370407,
+          "backward": 28.580004066940457,
+          "optimizer": 9.60280164124435,
+          "host_sync": 11.369921853057393
+        }
+      },
+      "baseline_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 28.580004066940457,
+        "evidence": "backward has the largest measured mean stage time (6.667 ms; 28.6% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "tuned_summary": {
+        "config": "activation_checkpoint",
+        "optimization": "activation checkpointing",
+        "changed_knob": "backward.target_ms + working_set_proxy",
+        "mean_step_ms": 24.43260617857143,
+        "median_step_ms": 24.4522185,
+        "p95_step_ms": 24.62585905,
+        "std_step_ms": 0.14802975577397856,
+        "throughput_tokens_per_s": 167644.82552796145,
+        "declared_working_set_mb": 4200,
+        "quality_checksum": 914731,
+        "quality_passed": true,
+        "stage_mean_ms": {
+          "data_wait": 4.544602857142857,
+          "h2d_copy": 2.3376551428571424,
+          "forward": 4.8427001785714285,
+          "backward": 7.7609801071428555,
+          "optimizer": 2.249456642857143,
+          "host_sync": 2.64956375
+        },
+        "stage_share_pct": {
+          "data_wait": 18.63691022423787,
+          "h2d_copy": 9.586463416529735,
+          "forward": 19.8593741429097,
+          "backward": 31.82691514651985,
+          "optimizer": 9.224771189929799,
+          "host_sync": 10.865565879873053
+        }
+      },
+      "tuned_bottleneck": {
+        "category": "compute",
+        "primary_stage": "backward",
+        "share_pct": 31.82691514651985,
+        "evidence": "backward has the largest measured mean stage time (7.761 ms; 31.8% of summed stages).",
+        "next_action": "inspect operator shapes, fusion opportunities, precision path and kernel selection",
+        "confidence": "teaching-hypothesis; corroborate with a real profiler before rollout"
+      },
+      "comparison": {
+        "mean_step_delta_ms": -1.0548706071428597,
+        "mean_step_gain_pct": -4.512287359568242,
+        "p95_delta_ms": -1.042769149999998,
+        "p95_gain_pct": -4.421681613485254,
+        "working_set_delta_mb": 1900,
+        "throughput_delta_tokens_per_s": -7564.616271268431,
+        "throughput_gain_pct": -4.317470676001937,
+        "time_improved": false,
+        "p95_improved": false,
+        "memory_improved": true,
+        "throughput_improved": false
+      },
+      "decision": {
+        "decision": "reject",
+        "reason": "P95 regression exceeds the workload contract",
+        "next_action": "inspect tail stalls and synchronization before rollout"
+      },
+      "contract_match": true
+    }
+  ],
+  "selected_candidate": "data_prefetch",
+  "report_markdown": "| Candidate | Primary bottleneck | Mean step gain | P95 gain | Working-set delta | Throughput gain | Decision |\n| --- | --- | ---: | ---: | ---: | ---: | --- |\n| data_prefetch | backward | +11.20% | +11.18% | +0 MB | +12.61% | accept |\n| kernel_fusion | backward | +10.52% | +10.54% | +0 MB | +11.75% | accept |\n| defer_scalar_sync | backward | +9.18% | +9.33% | +0 MB | +10.10% | accept |\n| activation_checkpoint | backward | -4.51% | -4.42% | +1900 MB | -4.32% | reject |\n\nAll measurements above come from the controlled CPU teaching pipeline. They show how to preserve a decision protocol; they are not GPU performance claims."
+}

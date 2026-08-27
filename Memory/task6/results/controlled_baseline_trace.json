@@ -1,0 +1,2207 @@
+{
+  "displayTimeUnit": "ms",
+  "traceEvents": [
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 6.0879974365234375,
+      "dur": 4574.02,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 4584.294006347656,
+      "dur": 2376.165,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 6969.24299621582,
+      "dur": 4906.958,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 11885.247009277344,
+      "dur": 6649.687,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 18544.654006958008,
+      "dur": 2213.795,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 20764.35400390625,
+      "dur": 2664.481,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 23448.163009643555,
+      "dur": 4558.32,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 28011.371002197266,
+      "dur": 2414.826,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 30436.059005737305,
+      "dur": 4834.535,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 35281.794006347656,
+      "dur": 6673.315,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 41960.60900878906,
+      "dur": 2255.532,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 44221.218002319336,
+      "dur": 2648.158,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 46886.733001708984,
+      "dur": 4491.21,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 51382.88700866699,
+      "dur": 2345.903,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 53733.5890045166,
+      "dur": 4789.202,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 58528.4580078125,
+      "dur": 6677.079,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 65216.09700012207,
+      "dur": 2293.246,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 67520.02500915527,
+      "dur": 2711.074,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 70247.87100219727,
+      "dur": 4587.058,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 74839.74200439453,
+      "dur": 2374.277,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 77218.82400512695,
+      "dur": 4876.261,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 82159.88000488281,
+      "dur": 6701.135,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 88871.3150024414,
+      "dur": 2266.954,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 91143.49700927734,
+      "dur": 2575.893,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 93729.82600402832,
+      "dur": 4575.718,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 98314.98400878906,
+      "dur": 2366.346,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 100687.14599609375,
+      "dur": 4859.776,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 105552.07901000977,
+      "dur": 6651.417,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 112209.51899719238,
+      "dur": 2250.085,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 114464.91000366211,
+      "dur": 2672.316,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 117167.45700073242,
+      "dur": 4596.313,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 121773.97500610352,
+      "dur": 2364.289,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 124143.10499572754,
+      "dur": 4869.232,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 129017.34300231934,
+      "dur": 6674.943,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 135702.5940093994,
+      "dur": 2337.792,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 138051.46200561523,
+      "dur": 2707.095,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 140771.28199768066,
+      "dur": 4578.481,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 145355.64700317383,
+      "dur": 2359.435,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 147719.93699645996,
+      "dur": 4896.183,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 152621.87899780273,
+      "dur": 6684.219,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 159311.375,
+      "dur": 2273.857,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 161595.9690093994,
+      "dur": 2705.423,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 164328.41200256348,
+      "dur": 4582.383,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 168915.71299743652,
+      "dur": 2349.641,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 171270.12300109863,
+      "dur": 4846.133,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 176121.34100341797,
+      "dur": 6674.708,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 182806.79299926758,
+      "dur": 2266.835,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 185078.762008667,
+      "dur": 2681.84,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 187787.03199768066,
+      "dur": 4566.353,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 192358.74099731445,
+      "dur": 2349.748,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 194714.02700805664,
+      "dur": 4850.292,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 199570.23300170898,
+      "dur": 6653.433,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 206228.80200195312,
+      "dur": 2189.511,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 208423.7440032959,
+      "dur": 2576.198,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 211014.8220062256,
+      "dur": 4576.787,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 215601.637008667,
+      "dur": 2301.101,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 217906.36500549316,
+      "dur": 4892.772,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 222808.8990020752,
+      "dur": 6610.47,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 229425.10000610352,
+      "dur": 2276.206,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 231712.2610015869,
+      "dur": 2706.037,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 234443.23300170898,
+      "dur": 4569.19,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 239017.32600402832,
+      "dur": 2291.882,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 241314.16900634766,
+      "dur": 4801.808,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 246123.10400390625,
+      "dur": 6729.517,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 252863.38299560547,
+      "dur": 2191.077,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 255058.8399963379,
+      "dur": 2643.226,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 257717.93901062012,
+      "dur": 4476.729,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 262199.6920013428,
+      "dur": 2348.124,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 264552.5769958496,
+      "dur": 4848.699,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 269406.3269958496,
+      "dur": 6657.908,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 276069.49800109863,
+      "dur": 2208.433,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 278283.19300842285,
+      "dur": 2652.357,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 280952.3099975586,
+      "dur": 4477.919,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 285434.84700012207,
+      "dur": 2358.633,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 287798.2630004883,
+      "dur": 4862.607,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 292665.34201049805,
+      "dur": 6649.604,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 299320.262008667,
+      "dur": 2259.793,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 301584.9929962158,
+      "dur": 2666.185,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 304266.1849975586,
+      "dur": 4580.275,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 308851.21099853516,
+      "dur": 2289.884,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 311145.7559967041,
+      "dur": 4841.423,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 315997.0729980469,
+      "dur": 6683.385,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 322685.637008667,
+      "dur": 2179.195,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 324868.2720031738,
+      "dur": 2688.121,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 327573.6900024414,
+      "dur": 4545.604,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 332123.8570098877,
+      "dur": 2318.153,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 334452.108001709,
+      "dur": 4801.757,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 339258.7689971924,
+      "dur": 6710.058,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 345982.96000671387,
+      "dur": 2266.126,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 348260.0160064697,
+      "dur": 2618.863,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 350903.2870025635,
+      "dur": 4538.331,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 355451.3740081787,
+      "dur": 2390.875,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 357852.31199645996,
+      "dur": 4869.828,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 362727.02000427246,
+      "dur": 6583.446,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 369314.7929992676,
+      "dur": 2182.133,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 371500.9110107422,
+      "dur": 2592.91,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 374136.029006958,
+      "dur": 4563.639,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 378704.56900024414,
+      "dur": 2304.825,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 381016.45600891113,
+      "dur": 4909.381,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 385935.81900024414,
+      "dur": 6611.095,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 392551.766998291,
+      "dur": 2189.844,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 394746.83500671387,
+      "dur": 2652.989,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 397419.22999572754,
+      "dur": 4525.954,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 401955.31900024414,
+      "dur": 2386.144,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 404346.6500091553,
+      "dur": 4876.801,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 409228.38400268555,
+      "dur": 6595.486,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 415829.2689971924,
+      "dur": 2279.125,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 418113.71600341797,
+      "dur": 2593.279,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 420720.65899658203,
+      "dur": 4595.426,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 425326.5370025635,
+      "dur": 2296.603,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 427625.96099853516,
+      "dur": 4848.492,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 432479.4759979248,
+      "dur": 6653.862,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 439139.28800964355,
+      "dur": 2298.979,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 441443.8170013428,
+      "dur": 2580.478,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 444039.2279968262,
+      "dur": 4486.408,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 448530.9459991455,
+      "dur": 2324.882,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 450865.8440093994,
+      "dur": 4865.762,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 455736.31199645996,
+      "dur": 6723.892,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 462465.1780090332,
+      "dur": 2188.308,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 464659.3110046387,
+      "dur": 2675.678,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 467361.1950073242,
+      "dur": 4596.134,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 471967.05599975586,
+      "dur": 2391.679,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 474363.72999572754,
+      "dur": 4906.199,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 479279.5950012207,
+      "dur": 6706.214,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 485996.71800231934,
+      "dur": 2294.666,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 488302.8690032959,
+      "dur": 2710.747,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 491039.53399658203,
+      "dur": 4586.623,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 495630.7600097656,
+      "dur": 2351.701,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 497987.2989959717,
+      "dur": 4848.174,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 502840.12100219727,
+      "dur": 6674.588,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 509519.9759979248,
+      "dur": 2188.907,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 511714.11599731445,
+      "dur": 2655.992,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 514384.65200805664,
+      "dur": 4616.228,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 519010.93699645996,
+      "dur": 2307.144,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 521322.9329986572,
+      "dur": 4901.238,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 526234.3760070801,
+      "dur": 6692.354,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 532937.3050079346,
+      "dur": 2217.565,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 535173.1289978027,
+      "dur": 2646.31,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 537832.4600067139,
+      "dur": 4487.254,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 542324.466003418,
+      "dur": 2345.224,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 544674.6029968262,
+      "dur": 4788.89,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 549468.9309997559,
+      "dur": 6683.518,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 556163.1640014648,
+      "dur": 2264.268,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 558433.4110107422,
+      "dur": 2653.355,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 561100.5590057373,
+      "dur": 4575.675,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 565686.5380096436,
+      "dur": 2391.962,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 568088.4280090332,
+      "dur": 4933.402,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 573031.8460083008,
+      "dur": 6669.504,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 579706.7129974365,
+      "dur": 2248.444,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 581960.654006958,
+      "dur": 2656.12,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 584635.9889984131,
+      "dur": 4548.463,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 589189.216003418,
+      "dur": 2353.51,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 591547.5240020752,
+      "dur": 4806.047,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 596358.1130065918,
+      "dur": 6656.846,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 603020.169998169,
+      "dur": 2188.473,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 605213.7109985352,
+      "dur": 2677.83,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 607918.949005127,
+      "dur": 4585.725,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 612509.25,
+      "dur": 2368.357,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 614882.0559997559,
+      "dur": 4876.24,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 619767.8690032959,
+      "dur": 6710.566,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 626483.1800079346,
+      "dur": 2245.502,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 628733.5570068359,
+      "dur": 2587.965,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    },
+    {
+      "name": "data_wait",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 631334.5330047607,
+      "dur": 4586.562,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 4.4,
+        "note": "teaching proxy for input wait / preprocessing"
+      }
+    },
+    {
+      "name": "h2d_copy",
+      "cat": "data_transfer",
+      "ph": "X",
+      "ts": 635931.56300354,
+      "dur": 2416.011,
+      "pid": 1,
+      "tid": "data_transfer",
+      "args": {
+        "teaching_target_ms": 2.2,
+        "note": "teaching proxy for host-to-device handoff"
+      }
+    },
+    {
+      "name": "forward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 638352.3370056152,
+      "dur": 4854.145,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 4.7,
+        "note": "teaching proxy for forward operator sequence"
+      }
+    },
+    {
+      "name": "backward",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 643211.6040039062,
+      "dur": 6646.167,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 6.5,
+        "note": "teaching proxy for backward operator sequence"
+      }
+    },
+    {
+      "name": "optimizer",
+      "cat": "compute",
+      "ph": "X",
+      "ts": 649863.5079956055,
+      "dur": 2212.136,
+      "pid": 1,
+      "tid": "compute",
+      "args": {
+        "teaching_target_ms": 2.1,
+        "note": "teaching proxy for optimizer update"
+      }
+    },
+    {
+      "name": "host_sync",
+      "cat": "synchronization",
+      "ph": "X",
+      "ts": 652082.0299987793,
+      "dur": 2668.933,
+      "pid": 1,
+      "tid": "synchronization",
+      "args": {
+        "teaching_target_ms": 2.5,
+        "note": "teaching proxy for blocking host/device boundary"
+      }
+    }
+  ],
+  "metadata": {
+    "provenance": "controlled CPU teaching lab; stage timings are not GPU profiler measurements",
+    "config": "baseline",
+    "contract": {
+      "model_id": "teaching-transformer-step/v1",
+      "phase": "training-step",
+      "batch_size": 8,
+      "sequence_length": 512,
+      "tokens_per_step": 4096,
+      "device": "cpu-first controlled lab",
+      "backend": "python time.perf_counter",
+      "dtype": "teaching-proxy",
+      "warmup_steps": 3,
+      "measurement_steps": 28,
+      "quality_checksum": 914731,
+      "max_p95_regression_pct": 3.0
+    }
+  }
+}

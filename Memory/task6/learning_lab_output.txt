@@ -1,0 +1,12 @@
+All invariants passed. Controlled CPU teaching workload; not a GPU benchmark.
+Baseline bottleneck hypothesis: backward (28.6% of summed stage time)
+Selected candidate: data_prefetch -> accept
+
+| Candidate | Primary bottleneck | Mean step gain | P95 gain | Working-set delta | Throughput gain | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| data_prefetch | backward | +11.20% | +11.18% | +0 MB | +12.61% | accept |
+| kernel_fusion | backward | +10.52% | +10.54% | +0 MB | +11.75% | accept |
+| defer_scalar_sync | backward | +9.18% | +9.33% | +0 MB | +10.10% | accept |
+| activation_checkpoint | backward | -4.51% | -4.42% | +1900 MB | -4.32% | reject |
+
+All measurements above come from the controlled CPU teaching pipeline. They show how to preserve a decision protocol; they are not GPU performance claims.
